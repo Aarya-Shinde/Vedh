@@ -132,6 +132,7 @@ def init_db():
 
         # Seed default collections if not already present
         _seed_defaults(conn)
+        _sync_status_collections(conn)
 
     conn.close()
 
@@ -166,3 +167,35 @@ def _seed_defaults(conn):
             INSERT OR IGNORE INTO tags (id, name, color, is_auto)
             VALUES (?, ?, ?, ?)
         """, (tid, name, color, is_auto))
+
+
+def _sync_status_collections(conn):
+    # Clear out any existing incorrect status assignments
+    conn.execute("""
+        DELETE FROM book_collections 
+        WHERE collection_id IN ('tbr-default', 'currently-reading-default', 'completed-default')
+    """)
+
+    # 1. Books with no progress, or progress percentage = 0 -> TBR
+    conn.execute("""
+        INSERT OR IGNORE INTO book_collections (book_id, collection_id)
+        SELECT b.id, 'tbr-default' FROM books b
+        LEFT JOIN reading_progress rp ON rp.book_id = b.id
+        WHERE rp.percentage IS NULL OR rp.percentage = 0
+    """)
+
+    # 2. Books with progress percentage > 0 and < 100 -> Currently Reading
+    conn.execute("""
+        INSERT OR IGNORE INTO book_collections (book_id, collection_id)
+        SELECT b.id, 'currently-reading-default' FROM books b
+        JOIN reading_progress rp ON rp.book_id = b.id
+        WHERE rp.percentage > 0 AND rp.percentage < 100
+    """)
+
+    # 3. Books with progress percentage >= 100 -> Completed
+    conn.execute("""
+        INSERT OR IGNORE INTO book_collections (book_id, collection_id)
+        SELECT b.id, 'completed-default' FROM books b
+        JOIN reading_progress rp ON rp.book_id = b.id
+        WHERE rp.percentage >= 100
+    """)
