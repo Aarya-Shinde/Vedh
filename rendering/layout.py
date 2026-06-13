@@ -83,6 +83,9 @@ class LayoutEngine:
     def set_fit_mode(self, mode: str):
         self._image_renderer.set_fit_mode(mode)
 
+    def set_scroll_y(self, val: float):
+        self._image_renderer.set_scroll_y(val)
+
     # ── Book loading ───────────────────────────────────────────────────────
 
     def load_book(self, book: Book):
