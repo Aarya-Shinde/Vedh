@@ -24,8 +24,9 @@ class ImageRenderer:
         self._theme:      dict  = {}
         self._page_width: float = 700.0
         self._is_comic:   bool  = False
-        self._fit_mode:   str   = "fit_width"   # fit_width | fit_page | original
+        self._fit_mode:   str   = "fit_width"   # fit_width | fit_height | fit_page | original
         self._pixmap_cache: OrderedDict = OrderedDict()
+        self._scroll_y:   float = 0.0
 
     # ── Configuration ──────────────────────────────────────────────────────
 
@@ -42,9 +43,12 @@ class ImageRenderer:
         self._fit_mode   = fit_mode
 
     def set_fit_mode(self, mode: str):
-        """fit_width | fit_page | original"""
+        """fit_width | fit_height | fit_page | original"""
         self._fit_mode = mode
         self._pixmap_cache.clear()
+
+    def set_scroll_y(self, val: float):
+        self._scroll_y = val
 
     def set_comic_mode(self, enabled: bool):
         self._is_comic = enabled
@@ -172,6 +176,10 @@ class ImageRenderer:
             # Scale to fill width
             scale = vw / orig_w
 
+        elif self._fit_mode == "fit_height":
+            # Scale to fill height
+            scale = vh / orig_h
+
         else:  # original
             scale = 1.0
 
@@ -180,7 +188,10 @@ class ImageRenderer:
 
         # Center in viewport
         offset_x = x + max(0.0, (vw - target_w) / 2.0)
-        offset_y = y + max(0.0, (vh - target_h) / 2.0)
+        if target_h > vh:
+            offset_y = y - self._scroll_y
+        else:
+            offset_y = y + (vh - target_h) / 2.0
 
         # Black background for comic pages
         painter.fillRect(
