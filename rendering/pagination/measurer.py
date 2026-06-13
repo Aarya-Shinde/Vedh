@@ -186,15 +186,15 @@ class BlockMeasurer:
         Measure image height by loading it and scaling to page width.
         Falls back to a sensible default if image can't be loaded.
         """
-        from PyQt6.QtGui import QPixmap, QImage
+        from PyQt6.QtGui import QImage
         import io
 
         FALLBACK_IMAGE_HEIGHT = 120.0
         pixmap = None
 
         # Check epub lazy loading
-        epub_file_path = block.attrs.get("epub_file_path")
-        epub_image_href = block.attrs.get("epub_image_href")
+        epub_file_path = block.attrs.get("epub_file_path") if block.attrs else None
+        epub_image_href = block.attrs.get("epub_image_href") if block.attrs else None
         if epub_file_path and epub_image_href:
             try:
                 data = self._load_epub_image(epub_file_path, epub_image_href)
@@ -204,6 +204,26 @@ class BlockMeasurer:
                         pixmap = image
             except Exception as e:
                 print(f"[BlockMeasurer] Lazy image load failed: {e}")
+
+        # Check archive lazy loading (CBZ / CBR)
+        archive_path = block.attrs.get("archive_path") if block.attrs else None
+        archive_member = block.attrs.get("archive_member") if block.attrs else None
+        if archive_path and archive_member:
+            try:
+                data = self._load_archive_member(archive_path, archive_member)
+                if data:
+                    image = QImage()
+                    if image.loadFromData(data):
+                        pixmap = image
+            except Exception as e:
+                print(f"[BlockMeasurer] Archive image load failed: {e}")
+
+        # Check file path lazy loading (CB7 / CBT extracted path)
+        file_path = block.attrs.get("file_path") if block.attrs else None
+        if file_path:
+            image = QImage(file_path)
+            if not image.isNull():
+                pixmap = image
 
         if pixmap is None or (hasattr(pixmap, "isNull") and pixmap.isNull()):
             if block.image_path:
@@ -299,4 +319,42 @@ class BlockMeasurer:
             for name in zf.namelist():
                 if name.replace("\\", "/").endswith(clean_href):
                     return zf.read(name)
+        return None
+
+    def _load_archive_member(self, archive_path: str, member: str) -> bytes | None:
+        from pathlib import Path
+        path = Path(archive_path)
+        fmt = path.suffix.lower().lstrip(".")
+        
+        data = None
+        if fmt == "cbz":
+            import zipfile
+            with zipfile.ZipFile(str(path), "r") as zf:
+                data = zf.read(member)
+        elif fmt == "cbr":
+            import rarfile
+            with rarfile.RarFile(str(path), "r") as rf:
+                data = rf.read(member)
+
+        if data:
+            from PIL import Image as PilImage
+            import io
+            try:
+                img = PilImage.open(io.BytesIO(data))
+                if img.format in ("JPEG", "PNG", "WEBP"):
+                    return data
+                if img.mode in ("P", "RGBA", "LA"):
+                    background = PilImage.new("RGB", img.size, (255, 255, 255))
+                    if img.mode in ("RGBA", "LA"):
+                        background.paste(img, mask=img.split()[-1])
+                    else:
+                        background.paste(img)
+                    img = background
+                elif img.mode != "RGB":
+                    img = img.convert("RGB")
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                return buf.getvalue()
+            except Exception:
+                return data
         return None
