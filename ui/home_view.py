@@ -304,14 +304,9 @@ class HomeView(QWidget):
         content_layout.addWidget(banner)
 
         # Content blocks
-        overview  = self._build_overview()
-        streak    = self._build_streak()
         currently = self._build_currently_reading()
         recent    = self._build_recent()
 
-        content_layout.addWidget(self._section_label("Reading Progress & Stats"))
-        content_layout.addWidget(overview)
-        content_layout.addWidget(streak)
         content_layout.addWidget(currently)
         content_layout.addWidget(recent)
         content_layout.addStretch()
@@ -416,7 +411,9 @@ class HomeView(QWidget):
         lbl = self._section_label("Recently Added")
         layout.addWidget(lbl)
 
-        rows = self.book_repo.get_all()[:8]
+        from core.config_manager import ConfigManager
+        limit = ConfigManager().get("recently_added_limit", 4)
+        rows = self.book_repo.get_all()[:limit]
 
         if not rows:
             empty = QLabel("Import some books to get started.")
