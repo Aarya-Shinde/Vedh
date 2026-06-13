@@ -1,0 +1,22 @@
+{
+    "name": "Dark",
+    "window_bg": "#121212",
+    "sidebar_bg": "#1A1A1C",
+    "sidebar_text": "#C2CAD0",
+    "sidebar_text_active": "#E7717D",
+    "sidebar_accent": "#E7717D",
+    "sidebar_hover": "#7E685A",
+    "card_bg": "#1C1C1E",
+    "card_border": "#C2B9B0",
+    "card_hover": "#2C2C2E",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#C2CAD0",
+    "text_muted": "#C2B9B0",
+    "accent": "#E7717D",
+    "accent_hover": "#F08B95",
+    "danger": "#C0392B",
+    "success": "#AFD275",
+    "divider": "#7E685A",
+    "scrollbar": "#1A1A1C",
+    "scrollbar_hover": "#E7717D"
+}
