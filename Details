@@ -1,0 +1,70 @@
+vedh/
+│
+├── app/
+│   └── main.py
+│
+├── ui/
+│   ├── main_window.py
+│   ├── sidebar.py
+│   ├── library_view.py
+│   ├── book_card.py
+│   ├── reader_view.py          ← created, empty
+│   └── settings.py             ← created, empty
+│
+├── core/
+│   ├── book_model.py
+│   ├── theme_manager.py
+│   └── plugin_manager.py
+│
+├── engines/
+│   ├── epub_engine.py          ← created, empty
+│   ├── pdf_engine.py           ← created, empty
+│   └── comic_engine.py         ← created, empty
+│
+├── rendering/
+│   ├── text_renderer.py        ← created, empty
+│   ├── image_renderer.py       ← created, empty
+│   ├── layout.py               ← created, empty
+│   └── pagination/
+│       ├── engine.py           ← created, empty
+│       ├── measurer.py         ← created, empty
+│       └── cache.py            ← created, empty
+│
+├── storage/
+│   ├── database.py
+│   └── repositories.py
+│
+├── themes/
+│   ├── app/
+│   │   ├── dark.json
+│   │   └── light.json
+│   └── reader/
+│       ├── default.json
+│       ├── sepia.json
+│       └── night.json
+│
+├── plugins/                    ← empty, ready for plugins
+│
+├── assets/                     ← empty, for fonts/icons later
+│
+└── __init__.py
+
+
+
+venv\Scripts\activate
+
+python app/main.py
+
+
+
+
+
+Pink: #E7717D
+
+Light Gray: #C2CAD0
+
+Beige-Gray: #C2B9B0
+
+Brown: #7E685A
+
+Light Green: #AFD275
