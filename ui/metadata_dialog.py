@@ -70,6 +70,30 @@ class MetadataDialog(QDialog):
         )
         layout.addWidget(title)
 
+        # Book Type selector (Always Visible)
+        from PyQt6.QtWidgets import QComboBox
+        type_row = QHBoxLayout()
+        type_row.setSpacing(12)
+        type_lbl = QLabel("Book Type:")
+        type_lbl.setStyleSheet(f"font-size: 13px; color: {self.theme.app('text_secondary')};")
+
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["Published", "Fanfic", "Manga", "Comic", "Unknown"])
+
+        curr_type = (self.book_row.get("book_type") or "unknown").lower()
+        idx = self.type_combo.findText(curr_type.title())
+        if idx >= 0:
+            self.type_combo.setCurrentIndex(idx)
+        else:
+            self.type_combo.setCurrentIndex(4) # Unknown
+
+        self.type_combo.setFixedHeight(30)
+
+        type_row.addWidget(type_lbl)
+        type_row.addWidget(self.type_combo)
+        type_row.addStretch()
+        layout.addLayout(type_row)
+
         # Search fields
         search_row = QHBoxLayout()
         self._title_input = QLineEdit(self.book_row["title"] or "")
@@ -134,7 +158,7 @@ class MetadataDialog(QDialog):
 
         self._save_btn = QPushButton("Save Metadata")
         self._save_btn.setFixedHeight(36)
-        self._save_btn.setEnabled(False)
+        self._save_btn.setEnabled(True)  # Enable by default to allow setting type without searching
         self._save_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self._save_btn.clicked.connect(self._on_save)
         self._save_btn.setStyleSheet(self._accent_btn_style())
@@ -282,49 +306,61 @@ class MetadataDialog(QDialog):
     # ── Save ───────────────────────────────────────────────────────────────
 
     def _on_save(self):
-        if not self._result:
-            return
-
-        r       = self._result
         book_id = self.book_row["id"]
         conn    = __import__(
             'storage.database', fromlist=['get_connection']
         ).get_connection()
 
-        cover_val = None
-        if r.cover_data:
-            from storage.repositories import save_cover_image
-            cover_val = save_cover_image(book_id, r.cover_data)
+        selected_type = self.type_combo.currentText().lower()
 
-        with conn:
-            conn.execute("""
-                UPDATE books SET
-                    title       = COALESCE(?, title),
-                    author      = COALESCE(?, author),
-                    publisher   = COALESCE(?, publisher),
-                    description = COALESCE(?, description),
-                    language    = COALESCE(?, language),
-                    cover       = COALESCE(?, cover),
-                    updated_at  = datetime('now')
-                WHERE id = ?
-            """, (
-                r.title,
-                r.author,
-                r.publisher,
-                r.description,
-                r.language,
-                cover_val,
-                book_id,
-            ))
-        conn.close()
+        r = self._result
+        if r:
+            cover_val = None
+            if r.cover_data:
+                from storage.repositories import save_cover_image
+                cover_val = save_cover_image(book_id, r.cover_data)
 
-        # Save tags
-        tag_repo = TagRepository()
-        for tag_name in r.tags:
-            clean = tag_name.lower().strip()[:30]
-            if clean:
-                tag_id = tag_repo.get_or_create(clean, is_auto=True)
-                tag_repo.add_to_book(book_id, tag_id)
+            with conn:
+                conn.execute("""
+                    UPDATE books SET
+                        title       = COALESCE(?, title),
+                        author      = COALESCE(?, author),
+                        publisher   = COALESCE(?, publisher),
+                        description = COALESCE(?, description),
+                        language    = COALESCE(?, language),
+                        cover       = COALESCE(?, cover),
+                        book_type   = ?,
+                        updated_at  = datetime('now')
+                    WHERE id = ?
+                """, (
+                    r.title,
+                    r.author,
+                    r.publisher,
+                    r.description,
+                    r.language,
+                    cover_val,
+                    selected_type,
+                    book_id,
+                ))
+            conn.close()
+
+            # Save tags
+            tag_repo = TagRepository()
+            for tag_name in r.tags:
+                clean = tag_name.lower().strip()[:30]
+                if clean:
+                    tag_id = tag_repo.get_or_create(clean, is_auto=True)
+                    tag_repo.add_to_book(book_id, tag_id)
+        else:
+            # Only update book_type
+            with conn:
+                conn.execute("""
+                    UPDATE books SET
+                        book_type   = ?,
+                        updated_at  = datetime('now')
+                    WHERE id = ?
+                """, (selected_type, book_id))
+            conn.close()
 
         self.accept()
 
