@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QScrollArea,
     QGridLayout, QFileDialog, QSizePolicy,
-    QLineEdit, QComboBox
+    QLineEdit, QComboBox, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QColor, QPainter, QFont
@@ -17,6 +17,87 @@ SUPPORTED_FORMATS = (
     "Comics (*.cbz *.cbr *.cb7 *.cbt);;"
     "All supported files (*.epub *.pdf *.txt *.html *.fb2 *.cbz *.cbr)"
 )
+
+
+class BookTypeDialog(QDialog):
+    def __init__(self, book_title: str, theme, parent=None):
+        super().__init__(parent)
+        self.theme = theme
+        self.setWindowTitle("Identify Book Type")
+        self.setFixedSize(360, 185)
+        self.setModal(True)
+        
+        # Build UI
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+        
+        title_lbl = QLabel("Unable to identify book type for:")
+        title_lbl.setStyleSheet(f"font-size: 13px; color: {self.theme.app('text_secondary')};")
+        layout.addWidget(title_lbl)
+        
+        book_lbl = QLabel(book_title)
+        book_lbl.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {self.theme.app('text_primary')};")
+        book_lbl.setWordWrap(True)
+        layout.addWidget(book_lbl)
+        
+        select_row = QHBoxLayout()
+        select_lbl = QLabel("Select Type:")
+        select_lbl.setStyleSheet(f"font-size: 13px; color: {self.theme.app('text_secondary')};")
+        
+        self.combo = QComboBox()
+        self.combo.addItems(["Published", "Fanfic", "Manga", "Comic"])
+        self.combo.setFixedHeight(30)
+        self.combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {self.theme.app('card_bg')};
+                color: {self.theme.app('text_primary')};
+                border: 1px solid {self.theme.app('divider')};
+                border-radius: 4px;
+                padding-left: 8px;
+            }}
+        """)
+        
+        select_row.addWidget(select_lbl)
+        select_row.addWidget(self.combo)
+        layout.addLayout(select_row)
+        
+        # Spacer
+        layout.addStretch()
+        
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        
+        self.ok_btn = QPushButton("Save")
+        self.ok_btn.setFixedHeight(30)
+        self.ok_btn.setFixedWidth(80)
+        self.ok_btn.clicked.connect(self.accept)
+        self.ok_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {self.theme.app('accent')};
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: {self.theme.app('accent_hover')};
+            }}
+        """)
+        
+        btn_row.addWidget(self.ok_btn)
+        layout.addLayout(btn_row)
+        
+        # Dialog Style
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {self.theme.app('window_bg')};
+            }}
+        """)
+        
+    def get_selected_type(self) -> str:
+        return self.combo.currentText().lower()
 
 
 class LibraryView(QWidget):
@@ -491,6 +572,11 @@ class LibraryView(QWidget):
             image_block_ratio = img_ratio,
         )
 
+        if book_type == "unknown":
+            dialog = BookTypeDialog(meta.title, self.theme, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                book_type = dialog.get_selected_type()
+
         # Save book
         book_id = self.repo.add(meta, file_path, fmt)
 
@@ -518,6 +604,9 @@ class LibraryView(QWidget):
         col_id = collection_map.get(book_type)
         if col_id:
             col_repo.add_book(book_id, col_id)
+
+        # Sync unread/imported books to TBR
+        col_repo.add_book(book_id, "tbr-default")
 
         self.plugins.emit_book_import(book_id, file_path)
 
