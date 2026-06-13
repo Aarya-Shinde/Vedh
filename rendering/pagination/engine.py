@@ -54,6 +54,16 @@ class PaginationEngine:
 
     def _run(self, book: Book) -> PaginationResult:
         pages: list[list[tuple[int, int]]] = []
+
+        if book.format in {"cbz", "cbr", "cb7", "cbt"}:
+            for chapter_idx, chapter in enumerate(book.chapters):
+                for block_idx in range(len(chapter.blocks)):
+                    pages.append([(chapter_idx, block_idx)])
+            return PaginationResult(
+                pages=pages,
+                total_pages=len(pages),
+            )
+
         current_page: list[tuple[int, int]] = []
         current_height: float = 0.0
 
