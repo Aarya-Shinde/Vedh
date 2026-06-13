@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider,
-    QSizePolicy, QStackedLayout
+    QSizePolicy, QStackedLayout,
+    QDialog, QGridLayout
 )
 from PyQt6.QtGui import (
     QPainter, QKeySequence, QShortcut,
@@ -19,6 +20,99 @@ from storage.repositories import ProgressRepository
 from ui.toc_panel import TocPanel
 
 
+class HelpOverlayDialog(QDialog):
+    def __init__(self, theme: ThemeManager, parent=None):
+        super().__init__(parent)
+        self.theme = theme
+        self.setWindowTitle("Keyboard Shortcuts & Controls")
+        self.setFixedSize(480, 380)
+        self.setModal(True)
+        self._build_ui()
+        self._apply_theme()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        title = QLabel("Shortcuts & Controls")
+        title.setStyleSheet(
+            f"font-size: 16px; font-weight: 600; "
+            f"color: {self.theme.app('text_primary')};"
+        )
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 2)
+
+        shortcuts = [
+            ("Left / Right / Space", "Next/Previous page (or scroll page)"),
+            ("Up / Down", "Fine vertical scroll (Comics)"),
+            ("Mouse Wheel", "Vertical scroll (Comics)"),
+            ("Mouse Drag", "Pan image in all directions"),
+            ("F", "Toggle Fullscreen mode"),
+            ("T", "Toggle Table of Contents"),
+            ("[ / ]", "Change font size (EPUB/Text)"),
+            ("Escape", "Exit Fullscreen or Close Book"),
+            ("?", "Show this Help Overlay"),
+        ]
+
+        for idx, (keys, desc) in enumerate(shortcuts):
+            key_lbl = QLabel(keys)
+            key_lbl.setStyleSheet(f"""
+                QLabel {{
+                    background: {self.theme.app('sidebar_hover')};
+                    color: {self.theme.app('text_primary')};
+                    border: 1px solid {self.theme.app('divider')};
+                    border-radius: 4px;
+                    padding: 3px 6px;
+                    font-family: monospace;
+                    font-size: 11px;
+                }}
+            """)
+            key_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(f"font-size: 12px; color: {self.theme.app('text_secondary')};")
+            
+            grid.addWidget(key_lbl, idx, 0)
+            grid.addWidget(desc_lbl, idx, 1)
+
+        layout.addLayout(grid)
+        layout.addStretch()
+
+        close_btn = QPushButton("Got it")
+        close_btn.setFixedHeight(32)
+        close_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        close_btn.clicked.connect(self.accept)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {self.theme.app('accent')};
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                font-weight: 600;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background: {self.theme.app('accent')};
+                opacity: 0.9;
+            }}
+        """)
+        layout.addWidget(close_btn)
+
+    def _apply_theme(self):
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {self.theme.app('card_bg')};
+                border: 1px solid {self.theme.app('card_border')};
+                border-radius: 12px;
+            }}
+        """)
+
+
 class ReaderCanvas(QWidget):
     resized = pyqtSignal()
 
@@ -31,15 +125,18 @@ class ReaderCanvas(QWidget):
         self._old_pixmap    = None
         self._animation_offset = 0.0
         self._animation_direction = 1
+        self._scroll_y      = 0.0
+        self._drag_start_y  = None
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
         self.setMinimumSize(QSize(400, 500))
 
-    def set_page(self, page_num: int, animate: bool = True):
+    def set_page(self, page_num: int, animate: bool = True, scroll_y: float = 0.0):
         old_page = self._page_num
         self._page_num = page_num
+        self._scroll_y = scroll_y
 
         if animate and old_page != page_num and self.width() > 0:
             # Determine direction: next (slides left, i.e. offset goes negative)
@@ -66,7 +163,7 @@ class ReaderCanvas(QWidget):
             self._animation_direction = direction
 
             self._animation = QVariantAnimation(self)
-            self._animation.setDuration(400)  # slightly slower for stunning page curl
+            self._animation.setDuration(650)  # slightly slower for stunning page curl
             self._animation.setStartValue(0.0)
             self._animation.setEndValue(float(self.width()))
             self._animation.setEasingCurve(QEasingCurve.Type.OutQuad)
@@ -97,6 +194,9 @@ class ReaderCanvas(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        if self._engine:
+            self._engine.set_scroll_y(self._scroll_y)
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -280,6 +380,142 @@ class ReaderCanvas(QWidget):
         super().resizeEvent(event)
         self.resized.emit()
 
+    def _get_scroll_range(self) -> tuple[float, float]:
+        """Returns (max_scroll_y, target_h) for the current page/comic."""
+        from core.book_model import BlockType
+        if not self._engine or self._engine.total_pages == 0:
+            return 0.0, 0.0
+
+        pages_to_check = [self._page_num]
+        if self._double_page:
+            right_page = min(self._page_num + 1, self._engine.total_pages - 1)
+            if right_page != self._page_num:
+                pages_to_check.append(right_page)
+
+        max_scroll_overall = 0.0
+        max_target_h_overall = 0.0
+
+        for p_num in pages_to_check:
+            blocks = self._engine.get_page_blocks(p_num)
+            if not blocks:
+                continue
+                
+            block = blocks[0]
+            if block.type != BlockType.IMAGE:
+                continue
+                
+            pixmap = self._engine._image_renderer._get_pixmap(block)
+            if not pixmap or pixmap.isNull():
+                continue
+                
+            orig_w = pixmap.width()
+            orig_h = pixmap.height()
+            if orig_w == 0 or orig_h == 0:
+                continue
+                
+            vw = float(self.width())
+            if self._double_page:
+                vw = vw / 2.0
+            vh = float(self.height())
+            fit_mode = self._engine._image_renderer._fit_mode
+            
+            if fit_mode == "fit_page":
+                scale = min(vw / orig_w, vh / orig_h)
+            elif fit_mode == "fit_width":
+                scale = vw / orig_w
+            elif fit_mode == "fit_height":
+                scale = vh / orig_h
+            else:  # original
+                scale = 1.0
+                
+            target_h = orig_h * scale
+            max_scroll = max(0.0, target_h - vh)
+            
+            if max_scroll > max_scroll_overall:
+                max_scroll_overall = max_scroll
+            if target_h > max_target_h_overall:
+                max_target_h_overall = target_h
+
+        return max_scroll_overall, max_target_h_overall
+
+    def wheelEvent(self, event):
+        if not self._engine or self._engine.total_pages == 0:
+            super().wheelEvent(event)
+            return
+            
+        max_scroll, _ = self._get_scroll_range()
+        if max_scroll <= 0:
+            super().wheelEvent(event)
+            return
+            
+        delta = event.angleDelta().y()
+        scroll_amount = -delta
+        new_scroll = self._scroll_y + scroll_amount
+        
+        if new_scroll < 0:
+            if self._scroll_y > 0.0:
+                self._scroll_y = 0.0
+                self.update()
+            else:
+                if self._page_num > 0:
+                    parent = self.parent()
+                    while parent and not hasattr(parent, "prev_page"):
+                        parent = parent.parent()
+                    if parent:
+                        parent.prev_page()
+                        prev_max_scroll, _ = self._get_scroll_range()
+                        self._scroll_y = prev_max_scroll
+                        self.update()
+        elif new_scroll > max_scroll:
+            if self._scroll_y < max_scroll:
+                self._scroll_y = max_scroll
+                self.update()
+            else:
+                if self._page_num < self._engine.total_pages - 1:
+                    self._scroll_y = 0.0
+                    parent = self.parent()
+                    while parent and not hasattr(parent, "next_page"):
+                        parent = parent.parent()
+                    if parent:
+                        parent.next_page()
+                else:
+                    self._scroll_y = max_scroll
+                    self.update()
+        else:
+            self._scroll_y = new_scroll
+            self.update()
+        event.accept()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            max_scroll, _ = self._get_scroll_range()
+            if max_scroll > 0:
+                self._drag_start_y = event.position().y()
+                self._drag_start_scroll_y = self._scroll_y
+                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if hasattr(self, "_drag_start_y") and self._drag_start_y is not None:
+            max_scroll, _ = self._get_scroll_range()
+            delta_y = event.position().y() - self._drag_start_y
+            self._scroll_y = max(0.0, min(max_scroll, self._drag_start_scroll_y - delta_y))
+            self.update()
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if hasattr(self, "_drag_start_y") and self._drag_start_y is not None:
+                self._drag_start_y = None
+                self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+                event.accept()
+                return
+        super().mouseReleaseEvent(event)
+
 
 class ReaderView(QWidget):
 
@@ -421,6 +657,13 @@ class ReaderView(QWidget):
         self._style_ghost(self._fit_btn)
         self._fit_btn.hide()
 
+        # Help (shortcuts)
+        self._help_btn = QPushButton("?")
+        self._help_btn.setFixedSize(28, 28)
+        self._help_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self._help_btn.clicked.connect(self._show_help_overlay)
+        self._style_ghost(self._help_btn)
+
         layout.addWidget(self._back_btn)
         layout.addWidget(self._toc_btn)
         layout.addSpacing(8)
@@ -435,6 +678,8 @@ class ReaderView(QWidget):
         layout.addWidget(self._double_btn)
         layout.addWidget(self._manga_btn)
         layout.addWidget(self._fit_btn)
+        layout.addSpacing(4)
+        layout.addWidget(self._help_btn)
         layout.addSpacing(4)
         layout.addWidget(self._fs_btn)
 
@@ -494,6 +739,7 @@ class ReaderView(QWidget):
         saved      = self._progress.get(str(book.id))
         start_page = saved["page"] if saved else 0
         start_page = max(0, min(start_page, self._total - 1))
+        start_scroll = saved["position"] if (saved and "position" in saved.keys()) else 0.0
 
         self._title_label.setText(book.metadata.title)
         self._slider.setMaximum(max(1, self._total - 1))
@@ -511,7 +757,7 @@ class ReaderView(QWidget):
         self._font_down.setVisible(not is_comic)
         self._font_up.setVisible(not is_comic)
 
-        self._go_to_page(start_page, animate=False)
+        self._go_to_page(start_page, animate=False, scroll_y=start_scroll)
 
     # ── Navigation ─────────────────────────────────────────────────────────
 
@@ -537,9 +783,9 @@ class ReaderView(QWidget):
         page = self._layout.page_for_chapter(chapter_idx)
         self._go_to_page(page, animate=False)
 
-    def _go_to_page(self, page_num: int, animate: bool = True):
+    def _go_to_page(self, page_num: int, animate: bool = True, scroll_y: float = 0.0):
         self._page = page_num
-        self._canvas.set_page(page_num, animate=animate)
+        self._canvas.set_page(page_num, animate=animate, scroll_y=scroll_y)
         self._update_controls()
         self._save_progress()
 
@@ -672,9 +918,10 @@ class ReaderView(QWidget):
 
     # ── Fit mode ───────────────────────────────────────────────────────────
 
-    _FIT_CYCLE  = ["fit_width", "fit_page", "original"]
+    _FIT_CYCLE  = ["fit_width", "fit_height", "fit_page", "original"]
     _FIT_LABELS = {
         "fit_width": "Fit Width",
+        "fit_height": "Fit Height",
         "fit_page":  "Fit Page",
         "original":  "Original",
     }
@@ -694,11 +941,12 @@ class ReaderView(QWidget):
             return
         pct     = (self._page / max(self._total - 1, 1)) * 100
         chapter = self._layout.chapter_for_page(self._page)
+        scroll_y = self._canvas._scroll_y if hasattr(self, "_canvas") else 0.0
         self._progress.save(
             book_id=str(self._book.id),
             chapter=chapter,
             page=self._page,
-            position=float(self._page),
+            position=scroll_y,
             percentage=pct,
         )
 
@@ -716,11 +964,15 @@ class ReaderView(QWidget):
 
     def _build_shortcuts(self):
         QShortcut(QKeySequence(Qt.Key.Key_Right),
-                  self).activated.connect(self.next_page)
+                  self).activated.connect(self.scroll_or_next_page)
         QShortcut(QKeySequence(Qt.Key.Key_Left),
-                  self).activated.connect(self.prev_page)
+                  self).activated.connect(self.scroll_or_prev_page)
         QShortcut(QKeySequence(Qt.Key.Key_Space),
-                  self).activated.connect(self.next_page)
+                  self).activated.connect(self.scroll_or_next_page)
+        QShortcut(QKeySequence(Qt.Key.Key_Down),
+                  self).activated.connect(self.fine_scroll_down)
+        QShortcut(QKeySequence(Qt.Key.Key_Up),
+                  self).activated.connect(self.fine_scroll_up)
         QShortcut(QKeySequence(Qt.Key.Key_Escape),
                   self).activated.connect(self._on_escape)
         QShortcut(QKeySequence("F"),
@@ -731,12 +983,56 @@ class ReaderView(QWidget):
                   self).activated.connect(lambda: self._change_font_size(-1))
         QShortcut(QKeySequence(Qt.Key.Key_BracketRight),
                   self).activated.connect(lambda: self._change_font_size(+1))
+        QShortcut(QKeySequence("?"),
+                  self).activated.connect(self._show_help_overlay)
+
+    def scroll_or_next_page(self):
+        if self._book and self._book.format in {"cbz", "cbr", "cb7", "cbt"}:
+            max_scroll, _ = self._canvas._get_scroll_range()
+            if max_scroll > 0 and self._canvas._scroll_y < max_scroll:
+                vh = self._canvas.height()
+                self._canvas._scroll_y = min(max_scroll, self._canvas._scroll_y + vh * 0.8)
+                self._canvas.update()
+                return
+        self.next_page()
+
+    def scroll_or_prev_page(self):
+        if self._book and self._book.format in {"cbz", "cbr", "cb7", "cbt"}:
+            max_scroll, _ = self._canvas._get_scroll_range()
+            if max_scroll > 0 and self._canvas._scroll_y > 0:
+                vh = self._canvas.height()
+                self._canvas._scroll_y = max(0.0, self._canvas._scroll_y - vh * 0.8)
+                self._canvas.update()
+                return
+        self.prev_page()
+
+    def fine_scroll_down(self):
+        if self._book and self._book.format in {"cbz", "cbr", "cb7", "cbt"}:
+            max_scroll, _ = self._canvas._get_scroll_range()
+            if max_scroll > 0 and self._canvas._scroll_y < max_scroll:
+                self._canvas._scroll_y = min(max_scroll, self._canvas._scroll_y + 40)
+                self._canvas.update()
+                return
+        self.next_page()
+
+    def fine_scroll_up(self):
+        if self._book and self._book.format in {"cbz", "cbr", "cb7", "cbt"}:
+            max_scroll, _ = self._canvas._get_scroll_range()
+            if max_scroll > 0 and self._canvas._scroll_y > 0:
+                self._canvas._scroll_y = max(0.0, self._canvas._scroll_y - 40)
+                self._canvas.update()
+                return
+        self.prev_page()
 
     def _on_escape(self):
         if self._is_fullscreen:
             self._toggle_fullscreen()
         else:
             self._on_close()
+
+    def _show_help_overlay(self):
+        dialog = HelpOverlayDialog(self.theme, self)
+        dialog.exec()
 
     # ── Close ──────────────────────────────────────────────────────────────
 
