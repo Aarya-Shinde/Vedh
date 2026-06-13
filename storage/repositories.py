@@ -39,10 +39,21 @@ class BookRepository:
 
         if file_hash:
             conn = get_connection()
-            dup = conn.execute("SELECT id, title FROM books WHERE hash = ?", (file_hash,)).fetchone()
+            dup = conn.execute("SELECT id, title, file_path, status FROM books WHERE hash = ?", (file_hash,)).fetchone()
             conn.close()
             if dup:
-                raise ValueError(f"Book already exists: '{dup['title']}'")
+                from pathlib import Path
+                if dup["status"] == "missing" or not Path(dup["file_path"]).exists():
+                    conn = get_connection()
+                    with conn:
+                        conn.execute(
+                            "UPDATE books SET file_path = ?, status = 'ok', updated_at = ? WHERE id = ?",
+                            (file_path, datetime.now().isoformat(), dup["id"])
+                        )
+                    conn.close()
+                    return dup["id"]
+                else:
+                    raise ValueError(f"Book already exists: '{dup['title']}'")
 
         book_id = str(uuid.uuid4())
         tags = json.dumps(metadata.tags)
@@ -159,6 +170,20 @@ class ProgressRepository:
                 position, percentage, device_id,
                 datetime.now().isoformat()
             ))
+
+            # Sync default status collections
+            if percentage >= 100.0:
+                conn.execute("INSERT OR IGNORE INTO book_collections (book_id, collection_id) VALUES (?, 'completed-default')", (book_id,))
+                conn.execute("DELETE FROM book_collections WHERE book_id = ? AND collection_id = 'currently-reading-default'", (book_id,))
+                conn.execute("DELETE FROM book_collections WHERE book_id = ? AND collection_id = 'tbr-default'", (book_id,))
+            elif percentage > 0.0:
+                conn.execute("INSERT OR IGNORE INTO book_collections (book_id, collection_id) VALUES (?, 'currently-reading-default')", (book_id,))
+                conn.execute("DELETE FROM book_collections WHERE book_id = ? AND collection_id = 'completed-default'", (book_id,))
+                conn.execute("DELETE FROM book_collections WHERE book_id = ? AND collection_id = 'tbr-default'", (book_id,))
+            else:
+                conn.execute("INSERT OR IGNORE INTO book_collections (book_id, collection_id) VALUES (?, 'tbr-default')", (book_id,))
+                conn.execute("DELETE FROM book_collections WHERE book_id = ? AND collection_id = 'currently-reading-default'", (book_id,))
+                conn.execute("DELETE FROM book_collections WHERE book_id = ? AND collection_id = 'completed-default'", (book_id,))
         conn.close()
 
     def get(self, book_id: str) -> Optional[sqlite3.Row]:
