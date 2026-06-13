@@ -206,6 +206,7 @@ class SettingsView(QWidget):
         cl.addSpacing(4)
         cl.addWidget(self._build_auto_classify_row())
         cl.addWidget(self._build_auto_assign_row())
+        cl.addWidget(self._build_recent_limit_row())
         cl.addWidget(self._build_management_actions())
         cl.addSpacing(20)
 
@@ -223,33 +224,75 @@ class SettingsView(QWidget):
     def _build_profile_card(self) -> QWidget:
         card = QWidget()
         card.setObjectName("profile_card")
+        
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(20)
 
-        avatar = QLabel("👤")
-        avatar.setStyleSheet("font-size: 24px; background: transparent;")
-        layout.addWidget(avatar)
+        # Avatar circle with premium gradient
+        username = ConfigManager().get("username", "Reader")
+        initial = username[0].upper() if username else "R"
+        
+        avatar_container = QWidget()
+        avatar_container.setFixedSize(60, 60)
+        avatar_container.setObjectName("profile_avatar_container")
+        
+        avatar_layout = QVBoxLayout(avatar_container)
+        avatar_layout.setContentsMargins(0, 0, 0, 0)
+        avatar_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.avatar_label = QLabel(initial)
+        self.avatar_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF; background: transparent;")
+        avatar_layout.addWidget(self.avatar_label)
+        
+        layout.addWidget(avatar_container)
 
+        # Info section
+        info_col = QVBoxLayout()
+        info_col.setSpacing(6)
+        
+        self.profile_title = QLabel(username)
+        self.profile_title.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {self.theme.app('text_primary')};")
+        
+        sub = QLabel("Personalize your reader profile")
+        sub.setStyleSheet(f"font-size: 11px; color: {self.theme.app('text_muted')};")
+        
+        info_col.addWidget(self.profile_title)
+        info_col.addWidget(sub)
+        
+        # Input row
+        input_row = QHBoxLayout()
+        input_row.setSpacing(8)
+        
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Enter your username")
-        self.username_input.setText(ConfigManager().get("username", "Reader"))
+        self.username_input.setText(username)
         self.username_input.setFixedHeight(34)
         self.username_input.setStyleSheet(f"""
             QLineEdit {{
+                border: 1px solid {self.theme.app('divider')};
                 border-radius: 6px;
                 padding-left: 10px;
                 font-size: 13px;
+                background: {self.theme.app('window_bg')};
+                color: {self.theme.app('text_primary')};
+            }}
+            QLineEdit:focus {{
+                border-color: {self.theme.app('accent')};
             }}
         """)
-        layout.addWidget(self.username_input, stretch=1)
-
-        self.save_user_btn = QPushButton("Save Profile")
+        
+        self.save_user_btn = QPushButton("Save")
         self.save_user_btn.setFixedHeight(34)
         self.save_user_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.save_user_btn.clicked.connect(self._on_save_profile)
-        layout.addWidget(self.save_user_btn)
-
+        
+        input_row.addWidget(self.username_input, stretch=1)
+        input_row.addWidget(self.save_user_btn)
+        
+        info_col.addLayout(input_row)
+        layout.addLayout(info_col, stretch=1)
+        
         return card
 
     def _on_save_profile(self):
@@ -257,8 +300,12 @@ class SettingsView(QWidget):
         if new_name:
             ConfigManager().set("username", new_name)
             self.profile_updated.emit()
+            if hasattr(self, "profile_title"):
+                self.profile_title.setText(new_name)
+            if hasattr(self, "avatar_label"):
+                self.avatar_label.setText(new_name[0].upper() if new_name else "R")
             self.save_user_btn.setText("Saved ✓")
-            QTimer.singleShot(1500, lambda: self.save_user_btn.setText("Save Profile"))
+            QTimer.singleShot(1500, lambda: self.save_user_btn.setText("Save"))
 
     # ── App theme & Accent ──────────────────────────────────────────────────
 
@@ -465,6 +512,24 @@ class SettingsView(QWidget):
         lbl_layout.addWidget(QLabel("Enabled"))
         lbl_layout.addStretch()
         return SettingRow("Auto-assign collections", lbl_widget, self.theme)
+
+    def _build_recent_limit_row(self) -> SettingRow:
+        combo = QComboBox()
+        combo.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        for val in [4, 6, 8, 10, 12]:
+            combo.addItem(f"{val} Books", val)
+        
+        current_limit = ConfigManager().get("recently_added_limit", 4)
+        combo.setCurrentIndex(combo.findData(current_limit))
+        combo.setStyleSheet(self._combo_style())
+        combo.currentIndexChanged.connect(
+            lambda i: self._on_recent_limit_changed(combo.itemData(i))
+        )
+        return SettingRow("Recently Added Limit", combo, self.theme)
+
+    def _on_recent_limit_changed(self, val: int):
+        ConfigManager().set("recently_added_limit", val)
+        self.profile_updated.emit()
 
     def _build_management_actions(self) -> QWidget:
         container = QWidget()
