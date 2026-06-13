@@ -408,26 +408,39 @@ class StatsView(QWidget):
 
     def _build_type_breakdown(self, overview: dict) -> SectionCard:
         card   = SectionCard("By Type", self.theme)
-        data   = overview.get("type_breakdown", [])
-        total  = sum(r["count"] for r in data) or 1
-        colors = {
-            "fanfic":    "#E91E8C",
-            "published": "#4A6FA5",
-            "manga":     "#E67E22",
-            "comic":     "#27AE60",
-            "unknown":   "#555555",
+        raw_data = overview.get("type_breakdown", [])
+        
+        # Build map of counts
+        counts = {r["book_type"].lower(): r["count"] for r in raw_data}
+        
+        # Combine manga and comic
+        comic_manga_count = counts.get("manga", 0) + counts.get("comic", 0)
+        
+        counts_combined = {
+            "published": counts.get("published", 0),
+            "fanfic": counts.get("fanfic", 0),
+            "comic / manga": comic_manga_count,
+            "unknown": counts.get("unknown", 0),
         }
-        for row in data:
+        
+        standard_types = ["published", "fanfic", "comic / manga", "unknown"]
+        total = sum(counts_combined.values()) or 1
+        colors = {
+            "fanfic":        "#E91E8C",
+            "published":     "#4A6FA5",
+            "comic / manga": "#27AE60",
+            "unknown":       "#555555",
+        }
+        
+        for key in standard_types:
             bar = HorizBar(
-                row["book_type"],
-                row["count"],
+                key.title(),
+                counts_combined[key],
                 total,
-                colors.get(row["book_type"], "#555555"),
+                colors.get(key, "#555555"),
                 self.theme,
             )
             card.add(bar)
-        if not data:
-            card.add_row("No data", "—")
         return card
 
     def _build_top_authors(self, overview: dict) -> SectionCard:
