@@ -296,6 +296,8 @@ class MainWindow(QMainWindow):
         self.home_view.refresh()
         self.library_view._apply_theme()
         self.settings_view._apply_theme()
+        if hasattr(self, "stats_view"):
+            self.stats_view.refresh()
 
     def _on_reader_theme(self, name: str):
         self.theme.load_reader_theme(name)
