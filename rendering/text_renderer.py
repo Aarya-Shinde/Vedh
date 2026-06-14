@@ -87,6 +87,95 @@ class TextRenderer:
         painter.setPen(QColor(self._theme.get("text_color", self._theme.get("text", "#1E1E1E"))))
 
         align = block.attrs.get("align")
+
+        # ── Drop-cap logic for first paragraph of a chapter ──
+        is_first = block.attrs.get("is_first_paragraph") and align != "center"
+        first_char = ""
+        rest_text = text.lstrip()
+        has_space_after = False
+
+        if is_first and rest_text:
+            if rest_text[0] in ('"', "'", '“', '‘', '”', '’') and len(rest_text) > 1 and rest_text[1].isalpha():
+                first_char = rest_text[:2]
+                rest_text = rest_text[2:]
+                has_space_after = len(text.lstrip()) > 2 and text.lstrip()[2].isspace()
+            elif rest_text[0].isalpha():
+                first_char = rest_text[0]
+                rest_text = rest_text[1:]
+                has_space_after = len(text.lstrip()) > 1 and text.lstrip()[1].isspace()
+            else:
+                is_first = False
+
+        if is_first:
+            # Setup drop-cap font
+            drop_font = QFont(font)
+            base_sz = font.pointSizeF()
+            if base_sz <= 0:
+                pixel_sz = font.pixelSize()
+                base_sz = pixel_sz * 0.75 if pixel_sz > 0 else 12.0
+            drop_font.setPointSizeF(base_sz * 2.8)
+            drop_font.setBold(True)
+            drop_fm = QFontMetricsF(drop_font)
+
+            drop_char_w = drop_fm.horizontalAdvance(first_char)
+            padding = 8.0
+            drop_box_w = drop_char_w + padding
+            
+            fm = QFontMetricsF(font)
+            if has_space_after:
+                drop_box_w += fm.horizontalAdvance(" ")
+
+            line_height = fm.height() * self._line_spacing()
+            drop_h = drop_fm.height()
+            
+            # Count lines to wrap
+            wrap_lines_count = int(round(drop_h / line_height))
+            if wrap_lines_count < 2:
+                wrap_lines_count = 2
+
+            # Word wrap simulation
+            words = rest_text.split()
+            lines = []
+            current_line = []
+            current_w = 0.0
+
+            for word in words:
+                word_w = fm.horizontalAdvance(word)
+                space_w = fm.horizontalAdvance(" ")
+                limit_w = (self._page_width - drop_box_w) if len(lines) < wrap_lines_count else self._page_width
+
+                if not current_line:
+                    current_line.append(word)
+                    current_w = word_w
+                elif current_w + space_w + word_w <= limit_w:
+                    current_line.append(word)
+                    current_w += space_w + word_w
+                else:
+                    lines.append(" ".join(current_line))
+                    current_line = [word]
+                    current_w = word_w
+
+            if current_line:
+                lines.append(" ".join(current_line))
+
+            # Draw the drop cap character using theme's primary color
+            painter.setFont(drop_font)
+            painter.setPen(QColor(self._theme.get("primary", "#D4AF37")))
+            painter.drawText(QPointF(x, y + drop_fm.ascent() * 0.85), first_char)
+
+            # Reset font and pen for body
+            painter.setFont(font)
+            painter.setPen(QColor(self._theme.get("text_color", self._theme.get("text", "#1E1E1E"))))
+
+            # Draw lines
+            current_y = y + fm.ascent()
+            for idx, line in enumerate(lines):
+                line_x = x + drop_box_w if idx < wrap_lines_count else x
+                painter.drawText(QPointF(line_x, current_y), line)
+                current_y += line_height
+
+            return len(lines) * line_height + self._paragraph_spacing()
+
         return self._draw_wrapped_text(painter, text, font, x, y, self._page_width, align=align)
 
     # ── Heading ────────────────────────────────────────────────────────────
