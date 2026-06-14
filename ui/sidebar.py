@@ -16,6 +16,7 @@ from storage.repositories import CollectionRepository
 NAV_ITEMS = [
     ("home",       "Home",       ""),
     ("library",    "Library",    ""),
+    ("art",        "Art",        ""),
     ("statistics", "Statistics", ""),
     ("settings",   "Settings",   ""),
 ]
