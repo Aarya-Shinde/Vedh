@@ -20,16 +20,20 @@ class FetchWorker(QThread):
     finished = pyqtSignal(object)       # FetchedMetadata
     failed   = pyqtSignal(str)
 
-    def __init__(self, title: str, author: str):
+    def __init__(self, title: str, author: str, book_type: str = "unknown", file_path: str = "", format: str = ""):
         super().__init__()
         self._title  = title
         self._author = author
+        self._book_type = book_type
+        self._file_path = file_path
+        self._format = format
 
     def run(self):
         try:
             fetcher = MetadataFetcher()
             result  = fetcher.fetch(
-                self._title, self._author,
+                self._title, self._author, book_type=self._book_type,
+                file_path=self._file_path, format=self._format,
                 on_progress=lambda s, p: self.progress.emit(s, p)
             )
             self.finished.emit(result)
@@ -80,7 +84,9 @@ class MetadataDialog(QDialog):
         self.type_combo = QComboBox()
         self.type_combo.addItems(["Published", "Fanfic", "Manga", "Comic", "Unknown"])
 
-        curr_type = (self.book_row.get("book_type") or "unknown").lower()
+        curr_type = "unknown"
+        if "book_type" in self.book_row.keys():
+            curr_type = (self.book_row["book_type"] or "unknown").lower()
         idx = self.type_combo.findText(curr_type.title())
         if idx >= 0:
             self.type_combo.setCurrentIndex(idx)
@@ -88,6 +94,7 @@ class MetadataDialog(QDialog):
             self.type_combo.setCurrentIndex(4) # Unknown
 
         self.type_combo.setFixedHeight(30)
+        self.type_combo.currentTextChanged.connect(self._on_type_changed)
 
         type_row.addWidget(type_lbl)
         type_row.addWidget(self.type_combo)
@@ -96,8 +103,15 @@ class MetadataDialog(QDialog):
 
         # Search fields
         search_row = QHBoxLayout()
-        self._title_input = QLineEdit(self.book_row["title"] or "")
-        self._title_input.setPlaceholderText("Book title")
+        title_val = self.book_row["title"] or ""
+        if curr_type == "fanfic" and not (title_val.startswith("http://") or title_val.startswith("https://")):
+            from core.metadata_fetcher import extract_fanfic_url
+            extracted = extract_fanfic_url(self.book_row["file_path"], self.book_row["format"])
+            if extracted:
+                title_val = extracted
+
+        self._title_input = QLineEdit(title_val)
+        self._title_input.setPlaceholderText("Book title or Fanfic URL (AO3/FF.net)")
         self._title_input.setStyleSheet(self._input_style())
 
         self._author_input = QLineEdit(self.book_row["author"] or "")
@@ -251,6 +265,15 @@ class MetadataDialog(QDialog):
     def _on_fetch(self):
         title  = self._title_input.text().strip()
         author = self._author_input.text().strip()
+        selected_type = self.type_combo.currentText().lower()
+
+        if selected_type == "fanfic" and not (title.startswith("http://") or title.startswith("https://")):
+            from core.metadata_fetcher import extract_fanfic_url
+            extracted = extract_fanfic_url(self.book_row["file_path"], self.book_row["format"])
+            if extracted:
+                title = extracted
+                self._title_input.setText(extracted)
+
         if not title:
             return
 
@@ -260,7 +283,11 @@ class MetadataDialog(QDialog):
         self._result_widget.hide()
         self._save_btn.setEnabled(False)
 
-        self._worker = FetchWorker(title, author)
+        self._worker = FetchWorker(
+            title, author, book_type=selected_type,
+            file_path=self.book_row["file_path"],
+            format=self.book_row["format"]
+        )
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)
         self._worker.failed.connect(self._on_failed)
@@ -385,10 +412,12 @@ class MetadataDialog(QDialog):
 
     def _accent_btn_style(self) -> str:
         t = self.theme
+        is_dark = "Dark" in t.app("name", "dark")
+        primary_text = "#181614" if is_dark else "#FFFFFF"
         return f"""
             QPushButton {{
                 background: {t.app('accent')};
-                color: #FFFFFF;
+                color: {primary_text};
                 border: none;
                 border-radius: 6px;
                 padding: 0 16px;
@@ -414,13 +443,32 @@ class MetadataDialog(QDialog):
                 border-radius: 6px;
                 padding: 0 16px;
                 font-size: 13px;
+                font-weight: 500;
             }}
             QPushButton:hover {{
                 background: {t.app('sidebar_hover')};
+                color: {t.app('text_primary')};
+                border-color: {t.app('accent')};
             }}
         """
 
     def _apply_theme(self):
+        t = self.theme
         self.setStyleSheet(
-            f"MetadataDialog {{ background: {self.theme.app('window_bg')}; }}"
+            f"MetadataDialog {{ background: {t.app('window_bg')}; }}"
         )
+        if hasattr(self, "_fetch_btn"):
+            self._fetch_btn.setStyleSheet(self._accent_btn_style())
+        if hasattr(self, "_save_btn"):
+            self._save_btn.setStyleSheet(self._accent_btn_style())
+        if hasattr(self, "_cancel_btn"):
+            self._cancel_btn.setStyleSheet(self._ghost_btn_style())
+
+    def _on_type_changed(self, text):
+        selected_type = text.lower()
+        title_val = self._title_input.text().strip()
+        if selected_type == "fanfic" and not (title_val.startswith("http://") or title_val.startswith("https://")):
+            from core.metadata_fetcher import extract_fanfic_url
+            extracted = extract_fanfic_url(self.book_row["file_path"], self.book_row["format"])
+            if extracted:
+                self._title_input.setText(extracted)
