@@ -20,9 +20,9 @@ class ConfigManager:
             "reader_theme": "default",
             "font_family": "Georgia",
             "font_size": 18.0,
-            "line_spacing": 1.6,
-            "page_width": 750.0,
-            "margin_h": 48.0,
+            "line_spacing": 2.0,
+            "page_width": 900.0,
+            "margin_h": 100.0,
             "margin_v": 40.0,
             "auto_classify": True,
             "auto_assign": True
@@ -31,6 +31,12 @@ class ConfigManager:
             try:
                 with open(CONFIG_PATH, "r") as f:
                     data = json.load(f)
+                    if data.get("page_width") in (750.0, 850.0):
+                        data["page_width"] = 900.0
+                    if data.get("margin_h") in (48.0, 90.0):
+                        data["margin_h"] = 100.0
+                    if data.get("line_spacing") in (1.6, 1.8):
+                        data["line_spacing"] = 2.0
                     self._config.update(data)
             except Exception as e:
                 print(f"[ConfigManager] Error loading config: {e}")
