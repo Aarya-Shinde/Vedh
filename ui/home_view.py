@@ -227,18 +227,42 @@ class HeroBanner(QWidget):
 
         from core.config_manager import ConfigManager
         user = ConfigManager().get("username", "Reader")
+        is_dark = "Dark" in theme.app("name", "dark")
+        if is_dark:
+            bg = f"""
+                qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #2A241F,
+                    stop:1 #161412
+                )
+            """
+            border = f"1px solid {theme.app('accent')}"
+            text_color = "#FFFFFF"
+            subtext_color = "rgba(255, 255, 255, 0.85)"
+        else:
+            bg = """
+                qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #FAF9F5,
+                    stop:1 #FCEEF0
+                )
+            """
+            border = f"1px solid {theme.app('card_border')}"
+            text_color = "#181614"  # Use the bg color of dark mode for that font
+            subtext_color = "#5C6661"
+
         welcome = QLabel(f"Welcome back, {user}")
-        welcome.setStyleSheet("""
+        welcome.setStyleSheet(f"""
             font-size: 24px;
             font-weight: 700;
-            color: #FFFFFF;
+            color: {text_color};
             background: transparent;
         """)
 
         subtext = QLabel("What do you want to read today?")
         subtext.setStyleSheet(f"""
             font-size: 13px;
-            color: {theme.app('text_secondary')};
+            color: {subtext_color};
             background: transparent;
         """)
 
@@ -246,14 +270,10 @@ class HeroBanner(QWidget):
         layout.addWidget(subtext)
         layout.addStretch()
 
-        # Premium gradient: Accent color transitioning to Sidebar hover/dark brown
         self.setStyleSheet(f"""
             HeroBanner {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {theme.app('accent')},
-                    stop:1 {theme.app('divider')}
-                );
+                background: {bg};
+                border: {border};
                 border-radius: 12px;
             }}
         """)
@@ -316,9 +336,9 @@ class HomeView(QWidget):
 
     def _build_header(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(54)
+        bar.setFixedHeight(60)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(32, 0, 32, 0)
+        layout.setContentsMargins(24, 0, 24, 0)
         title = QLabel("Home")
         title.setStyleSheet(
             f"font-size: 18px; font-weight: 600; "
