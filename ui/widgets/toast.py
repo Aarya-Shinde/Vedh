@@ -28,17 +28,6 @@ class ToastWidget(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
 
-        # Icon based on level
-        icons = {
-            "info": "ℹ️",
-            "success": "✅",
-            "warning": "⚠️",
-            "error": "❌"
-        }
-        icon_lbl = QLabel(icons.get(self.level, "ℹ️"))
-        icon_lbl.setStyleSheet("font-size: 14px; background: transparent;")
-        layout.addWidget(icon_lbl)
-
         # Message
         msg_lbl = QLabel(self.message)
         msg_lbl.setWordWrap(True)
