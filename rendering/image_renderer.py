@@ -247,10 +247,58 @@ class ImageRenderer:
 
         pixmap = self._load_pixmap(block)
         if pixmap and not pixmap.isNull():
+            pixmap = self._apply_dark_mode_filters(pixmap)
             # Evict oldest if full
             if len(self._pixmap_cache) >= 50:
                 self._pixmap_cache.popitem(last=False)
             self._pixmap_cache[cache_key] = pixmap
+        return pixmap
+
+    def _apply_dark_mode_filters(self, pixmap: QPixmap) -> QPixmap:
+        if pixmap.isNull() or self._is_comic:
+            return pixmap
+
+        # Check if theme background is dark
+        from PyQt6.QtGui import QColor, QImage
+        bg_hex = self._theme.get("background", self._theme.get("bg", "#FAF9F6"))
+        try:
+            bg_color = QColor(bg_hex)
+        except Exception:
+            bg_color = QColor("#FAF9F6")
+
+        if bg_color.lightness() >= 128:
+            return pixmap
+
+        image = pixmap.toImage()
+        w, h = image.width(), image.height()
+        if w == 0 or h == 0:
+            return pixmap
+
+        # Sample pixels to check if it has a light background / line-art
+        light_pixels = 0
+        total_samples = min(100, w * h)
+        
+        # Deterministic sampling grid
+        step_x = max(1, w // 10)
+        step_y = max(1, h // 10)
+        samples_count = 0
+        
+        for x in range(0, w, step_x):
+            for y in range(0, h, step_y):
+                pixel_color = QColor(image.pixelColor(x, y))
+                if pixel_color.lightness() > 200:
+                    light_pixels += 1
+                samples_count += 1
+                if samples_count >= total_samples:
+                    break
+            if samples_count >= total_samples:
+                break
+
+        if samples_count > 0 and (light_pixels / samples_count) >= 0.70:
+            # Invert line-art
+            image.invertPixels(QImage.InvertMode.InvertRgb)
+            return QPixmap.fromImage(image)
+
         return pixmap
 
     def _load_pixmap(self, block: Block) -> QPixmap | None:
