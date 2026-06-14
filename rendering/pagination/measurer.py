@@ -130,8 +130,66 @@ class BlockMeasurer:
         line_height   = fm.height() * self._line_spacing()
         para_spacing  = self._paragraph_spacing()
 
-        # Word-wrap simulation
-        line_count = self._count_wrapped_lines(text, fm, available_width)
+        # Word-wrap simulation (with drop-cap support)
+        is_first = block.attrs.get("is_first_paragraph") and block.attrs.get("align") != "center"
+        first_char = ""
+        rest_text = text.lstrip()
+        has_space_after = False
+
+        if is_first and rest_text:
+            if rest_text[0] in ('"', "'", '“', '‘', '”', '’') and len(rest_text) > 1 and rest_text[1].isalpha():
+                first_char = rest_text[:2]
+                rest_text = rest_text[2:]
+                has_space_after = len(text.lstrip()) > 2 and text.lstrip()[2].isspace()
+            elif rest_text[0].isalpha():
+                first_char = rest_text[0]
+                rest_text = rest_text[1:]
+                has_space_after = len(text.lstrip()) > 1 and text.lstrip()[1].isspace()
+            else:
+                is_first = False
+
+        if is_first:
+            drop_font = QFont(font)
+            base_sz = font.pointSizeF()
+            if base_sz <= 0:
+                pixel_sz = font.pixelSize()
+                base_sz = pixel_sz * 0.75 if pixel_sz > 0 else 12.0
+            drop_font.setPointSizeF(base_sz * 2.8)
+            drop_font.setBold(True)
+            drop_fm = QFontMetricsF(drop_font)
+
+            drop_char_w = drop_fm.horizontalAdvance(first_char)
+            padding = 8.0
+            drop_box_w = drop_char_w + padding
+            if has_space_after:
+                drop_box_w += fm.horizontalAdvance(" ")
+
+            drop_h = drop_fm.height()
+            wrap_lines_count = int(round(drop_h / line_height))
+            if wrap_lines_count < 2:
+                wrap_lines_count = 2
+
+            words = rest_text.split()
+            line_count = 0
+            current_w = 0.0
+            space_w = fm.horizontalAdvance(" ")
+
+            for word in words:
+                word_w = fm.horizontalAdvance(word)
+                limit_w = (available_width - drop_box_w) if line_count < wrap_lines_count else available_width
+
+                if current_w == 0.0:
+                    current_w = word_w
+                elif current_w + space_w + word_w <= limit_w:
+                    current_w += space_w + word_w
+                else:
+                    line_count += 1
+                    current_w = word_w
+            if current_w > 0:
+                line_count += 1
+            line_count = max(line_count, 1)
+        else:
+            line_count = self._count_wrapped_lines(text, fm, available_width)
 
         total_height = (line_count * line_height) + para_spacing
 
