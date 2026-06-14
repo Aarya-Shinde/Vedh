@@ -70,6 +70,28 @@ class EpubEngine:
             if "cover" in item.get_name().lower():
                 return item.get_content()
 
+        # Strategy 3: inspect the first few document items in the spine
+        # If they contain an image and minimal text, extract that image as cover
+        for item_id, _ in book.spine[:2]:
+            doc_item = book.get_item_with_id(item_id)
+            if doc_item and doc_item.get_type() == ebooklib.ITEM_DOCUMENT:
+                try:
+                    html = doc_item.get_content().decode("utf-8", errors="replace")
+                    soup = BeautifulSoup(html, "html.parser")
+                    text_len = len(soup.get_text(strip=True))
+                    if text_len < 1000:
+                        img_tag = soup.find(["img", "image"])
+                        if img_tag:
+                            src = img_tag.get("src") or img_tag.get("xlink:href") or img_tag.get("href")
+                            if src:
+                                from pathlib import Path
+                                img_filename = Path(src).name.lower()
+                                for img_item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
+                                    if Path(img_item.get_name()).name.lower() == img_filename:
+                                        return img_item.get_content()
+                except Exception:
+                    pass
+
         return None
 
     # ── Chapters ───────────────────────────────────────────────────────────
@@ -254,16 +276,36 @@ class EpubEngine:
         elif tag == "hr":
             blocks.append(Block(type=BlockType.HORIZONTAL_RULE))
 
-        # ── Page breaks (epub:type or class hints) ──
+        # ── Page breaks / Wrapper vs Paragraph divs ──
         elif tag == "div":
-            epub_type = element.get("epub:type", "")
-            classes   = " ".join(element.get("class", []))
+            epub_type = element.get("epub:type", "") or ""
+            classes   = " ".join(element.get("class", [])) if element.get("class") else ""
+            
             if "pagebreak" in epub_type.lower() or "page-break" in classes.lower():
                 blocks.append(Block(type=BlockType.PAGE_BREAK))
             else:
-                # Recurse into divs
-                for child in element.children:
-                    blocks.extend(self._parse_element(child))
+                # Check if this div contains other block elements
+                block_tags = {"div", "p", "blockquote", "img", "image", "table", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "hr"}
+                has_block_child = False
+                for descendant in element.find_all(True):
+                    if descendant.name.lower() in block_tags:
+                        has_block_child = True
+                        break
+                
+                if not has_block_child:
+                    # Treat this div as a paragraph
+                    text = element.get_text(separator=" ", strip=True)
+                    if text:
+                        attrs = self._extract_block_styles(element)
+                        blocks.append(Block(
+                            type=BlockType.PARAGRAPH,
+                            text=text,
+                            attrs=attrs,
+                        ))
+                else:
+                    # Recurse
+                    for child in element.children:
+                        blocks.extend(self._parse_element(child))
 
         # ── Tables — stub, not rendered yet ──
         elif tag == "table":
@@ -301,9 +343,28 @@ class EpubEngine:
                         text=prefix + text,
                     ))
 
-        # ── Section / article — recurse ──
-        elif tag in ("section", "article", "main", "aside", "figure"):
-            for child in element.children:
-                blocks.extend(self._parse_element(child))
+        # ── Fallback for other/unhandled tags (spans, custom, sections) ──
+        else:
+            block_tags = {"div", "p", "blockquote", "img", "image", "table", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "hr"}
+            has_block_child = False
+            for descendant in element.find_all(True):
+                if descendant.name.lower() in block_tags:
+                    has_block_child = True
+                    break
+            
+            if not has_block_child:
+                # Treat as paragraph if it contains text
+                text = element.get_text(separator=" ", strip=True)
+                if text:
+                    attrs = self._extract_block_styles(element)
+                    blocks.append(Block(
+                        type=BlockType.PARAGRAPH,
+                        text=text,
+                        attrs=attrs,
+                    ))
+            else:
+                # Recurse
+                for child in element.children:
+                    blocks.extend(self._parse_element(child))
 
         return blocks
