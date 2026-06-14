@@ -195,14 +195,15 @@ class PdfEngine:
 
             # ── Text block ──
             if block_type == 0:
+                lines_data = []
                 for line in block.get("lines", []):
                     line_text = ""
                     max_size  = 0.0
                     is_bold   = False
 
                     for span in line.get("spans", []):
-                        text = span.get("text", "").strip()
-                        if not text:
+                        text = span.get("text", "")
+                        if not text.strip():
                             continue
                         line_text += text + " "
                         size = span.get("size", 0)
@@ -213,31 +214,40 @@ class PdfEngine:
                             is_bold = True
 
                     line_text = line_text.strip()
-                    if not line_text:
-                        continue
+                    if line_text:
+                        lines_data.append({
+                            "text": line_text,
+                            "size": max_size,
+                            "bold": is_bold
+                        })
 
-                    # Classify as heading or paragraph
-                    is_chapter = self._is_chapter_marker(line_text, is_bold)
+                if not lines_data:
+                    continue
 
-                    if is_chapter:
+                current_paragraph_parts = []
+                for item in lines_data:
+                    txt = item["text"]
+                    sz = item["size"]
+                    bld = item["bold"]
+
+                    is_chapter = self._is_chapter_marker(txt, bld)
+                    is_heading = (modal_size > 0 and sz >= modal_size * HEADING_SIZE_RATIO) or is_chapter
+
+                    if is_heading:
+                        if current_paragraph_parts:
+                            blocks.append(self._create_merged_paragraph(current_paragraph_parts))
+                            current_paragraph_parts = []
+                        level = 1 if is_chapter else self._heading_level(sz, modal_size)
                         blocks.append(Block(
                             type=BlockType.HEADING,
-                            text=line_text,
-                            level=1,
-                        ))
-                    elif (modal_size > 0
-                            and max_size >= modal_size * HEADING_SIZE_RATIO):
-                        level = self._heading_level(max_size, modal_size)
-                        blocks.append(Block(
-                            type=BlockType.HEADING,
-                            text=line_text,
+                            text=txt,
                             level=level,
                         ))
                     else:
-                        blocks.append(Block(
-                            type=BlockType.PARAGRAPH,
-                            text=line_text,
-                        ))
+                        current_paragraph_parts.append(txt)
+
+                if current_paragraph_parts:
+                    blocks.append(self._create_merged_paragraph(current_paragraph_parts))
 
             # ── Image block ──
             elif block_type == 1:
@@ -311,3 +321,18 @@ class PdfEngine:
         if ratio >= 1.6:   return 2
         if ratio >= 1.3:   return 3
         return 4
+
+    def _create_merged_paragraph(self, parts: list[str]) -> Block:
+        merged_text = ""
+        for part in parts:
+            if not merged_text:
+                merged_text = part
+            else:
+                if merged_text.endswith("-"):
+                    merged_text = merged_text[:-1] + part
+                else:
+                    merged_text += " " + part
+        return Block(
+            type=BlockType.PARAGRAPH,
+            text=merged_text,
+        )
