@@ -246,7 +246,7 @@ class StatsView(QWidget):
         bar = QWidget()
         bar.setFixedHeight(60)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(32, 0, 32, 0)
+        layout.setContentsMargins(24, 0, 24, 0)
         title = QLabel("Statistics")
         title.setStyleSheet(
             f"font-size: 18px; font-weight: 600; "
