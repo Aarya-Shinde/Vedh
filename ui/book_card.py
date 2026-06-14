@@ -9,7 +9,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QPixmap, QColor, QPainter, QFont, QCursor, QDrag,
-    QLinearGradient, QPen
+    QLinearGradient, QPen, QPainterPath
 )
 from datetime import datetime
 
@@ -144,10 +144,12 @@ class BookCard(QWidget):
             self.open_action_btn = QPushButton("Open", self.hover_overlay)
             self.open_action_btn.setGeometry(25, 60, 110, 26)
             self.open_action_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+            is_dark = "Dark" in self.theme.app("name", "dark")
+            primary_text = "#181614" if is_dark else "#FFFFFF"
             self.open_action_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {self.theme.app("accent")};
-                    color: #FFFFFF;
+                    color: {primary_text};
                     border: none;
                     border-radius: 4px;
                     font-size: 11px;
@@ -234,7 +236,15 @@ class BookCard(QWidget):
         """Generate a beautiful gradient placeholder with watermarked title."""
         title = self.book_row["title"]
         fmt = self.book_row["format"]
-        color_hex = FORMAT_COLORS.get(fmt, "#555555")
+        
+        book_type = "unknown"
+        if "book_type" in self.book_row.keys():
+            book_type = (self.book_row["book_type"] or "unknown").lower()
+
+        if book_type == "fanfic":
+            color_hex = "#1E1E1E"
+        else:
+            color_hex = FORMAT_COLORS.get(fmt, "#555555")
         
         pixmap = QPixmap(160, 180)
         pixmap.fill(Qt.GlobalColor.transparent)
@@ -242,24 +252,76 @@ class BookCard(QWidget):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        gradient = QLinearGradient(0, 0, 160, 180)
-        gradient.setColorAt(0.0, QColor(color_hex).darker(140))
-        gradient.setColorAt(1.0, QColor(self.theme.app("accent")))
+        # Clip painter to rounded rectangle
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(0, 0, 160, 180, 6, 6)
+        painter.setClipPath(clip_path)
         
-        painter.setBrush(gradient)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(0, 0, 160, 180, 6, 6)
+        # 1. Base background
+        if book_type == "fanfic":
+            painter.setBrush(QColor(color_hex))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRect(0, 0, 160, 180)
+        else:
+            gradient = QLinearGradient(0, 0, 160, 180)
+            gradient.setColorAt(0.0, QColor(color_hex).darker(140))
+            gradient.setColorAt(1.0, QColor(self.theme.app("accent")))
+            painter.setBrush(gradient)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRect(0, 0, 160, 180)
         
+        # 2. Faint blurred image for fanfic
+        if book_type == "fanfic":
+            bg_path = "assets/images/Thin Ice.png"
+            bg_pix = QPixmap(bg_path)
+            if not bg_pix.isNull():
+                # Center crop and scale
+                scaled_bg = bg_pix.scaled(
+                    160, 180,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                
+                # Apply downscale-upscale blur technique
+                small = scaled_bg.scaled(
+                    16, 18,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.FastTransformation
+                )
+                blurred_bg = small.scaled(
+                    160, 180,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                
+                # Draw blurred image with 0.5 opacity for a faint look
+                painter.setOpacity(0.5)
+                x_offset = (blurred_bg.width() - 160) // 2
+                y_offset = (blurred_bg.height() - 180) // 2
+                painter.drawPixmap(0, 0, blurred_bg, x_offset, y_offset, 160, 180)
+                painter.setOpacity(1.0)
+        
+        # 3. Text
         font = QFont("Segoe UI", 11, QFont.Weight.DemiBold)
         painter.setFont(font)
-        painter.setPen(QColor(255, 255, 255, 140))
+        painter.setPen(QColor(255, 255, 255, 220))
         
-        text_rect = QRectF(12, 30, 136, 100)
+        text_rect = QRectF(12, 40, 136, 100)
         painter.drawText(
             text_rect,
             Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
             self._truncate(title, 40)
         )
+
+        if book_type == "fanfic":
+            sub_font = QFont("Segoe UI", 8, QFont.Weight.Bold)
+            painter.setFont(sub_font)
+            painter.setPen(QColor(255, 255, 255, 180))
+            painter.drawText(
+                QRectF(0, 15, 160, 20),
+                Qt.AlignmentFlag.AlignCenter,
+                "FANFICTION"
+            )
         
         painter.end()
         return pixmap
