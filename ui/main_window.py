@@ -13,6 +13,7 @@ from ui.library_view import LibraryView
 from ui.home_view  import HomeView
 from ui.stats_view import StatsView
 from ui.settings_view import SettingsView
+from ui.art_view import ArtView
 
 
 class FadeStackedWidget(QStackedWidget):
@@ -166,15 +167,18 @@ class MainWindow(QMainWindow):
         self.library_view = LibraryView(self.theme, self.plugins)
         self.stack.addWidget(self.library_view)             # 1
 
+        self.art_view = ArtView(self.theme)
+        self.stack.addWidget(self.art_view)                 # 2
+
         self.stats_view = StatsView(self.theme)
-        self.stack.addWidget(self.stats_view)               # 2
+        self.stack.addWidget(self.stats_view)               # 3
 
         from ui.reader_view import ReaderView
         self.reader_view = ReaderView(self.theme)
-        self.stack.addWidget(self.reader_view)              # 3
+        self.stack.addWidget(self.reader_view)              # 4
 
         self.settings_view = SettingsView(self.theme)
-        self.stack.addWidget(self.settings_view)            # 4
+        self.stack.addWidget(self.settings_view)            # 5
 
         self.loading_overlay = LoadingOverlay(self, self.theme)
         self.stack.setCurrentIndex(0)
@@ -201,15 +205,17 @@ class MainWindow(QMainWindow):
         self.settings_view.profile_updated.connect(self.sidebar._load_collections)
 
     def _on_nav(self, index: int):
-        # 0=Home, 1=Library, 2=Statistics, 3=Settings
-        # Map sidebar index 3 (Settings) to stacked widget index 4 (SettingsView)
-        target = 4 if index == 3 else index
+        # 0=Home, 1=Library, 2=Art, 3=Statistics, 4=Settings
+        # Map sidebar index 4 (Settings) to stacked widget index 5 (SettingsView)
+        target = 5 if index == 4 else index
         self.stack.setCurrentIndex(target)
         if index == 0:
             self.home_view.refresh()
         elif index == 1:
             self.library_view.filter_by_collection(None)
         elif index == 2:
+            self.art_view.refresh()
+        elif index == 3:
             self.stats_view.refresh()
 
     def _on_collection_filter(self, collection_id: str):
@@ -271,7 +277,7 @@ class MainWindow(QMainWindow):
         self._current_session_start_page = 0
         self.sidebar.setVisible(False)
         self.reader_view.load_book(book)
-        self.stack.setCurrentIndex(3)
+        self.stack.setCurrentIndex(4)
         self.plugins.emit_book_open(str(book.id))
 
     def _on_reader_closed(self):
@@ -296,6 +302,8 @@ class MainWindow(QMainWindow):
         self.home_view.refresh()
         self.library_view._apply_theme()
         self.settings_view._apply_theme()
+        self.art_view._apply_theme()
+        self.art_view.refresh()
         if hasattr(self, "stats_view"):
             self.stats_view.refresh()
 
