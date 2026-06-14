@@ -55,6 +55,7 @@ class ConvertDialog(QDialog):
         self.book_row = book_row
         self.theme    = theme
         self._worker: ConvertWorker | None = None
+        self._target_buttons = []
 
         self.setWindowTitle("Convert Book")
         self.setFixedSize(440, 280)
@@ -110,6 +111,7 @@ class ConvertDialog(QDialog):
                     lambda checked, t=target_fmt: self._on_start(t)
                 )
                 btn.setStyleSheet(self._accent_btn_style())
+                self._target_buttons.append(btn)
                 btn_row.addWidget(btn)
 
         btn_row.addStretch()
@@ -217,10 +219,12 @@ class ConvertDialog(QDialog):
 
     def _accent_btn_style(self) -> str:
         t = self.theme
+        is_dark = "Dark" in t.app("name", "dark")
+        primary_text = "#181614" if is_dark else "#FFFFFF"
         return f"""
             QPushButton {{
                 background: {t.app('accent')};
-                color: #FFFFFF;
+                color: {primary_text};
                 border: none;
                 border-radius: 6px;
                 padding: 0 20px;
@@ -242,13 +246,21 @@ class ConvertDialog(QDialog):
                 border-radius: 6px;
                 padding: 0 16px;
                 font-size: 13px;
+                font-weight: 500;
             }}
             QPushButton:hover {{
                 background: {t.app('sidebar_hover')};
+                color: {t.app('text_primary')};
+                border-color: {t.app('accent')};
             }}
         """
 
     def _apply_theme(self):
+        t = self.theme
         self.setStyleSheet(
-            f"ConvertDialog {{ background: {self.theme.app('window_bg')}; }}"
+            f"ConvertDialog {{ background: {t.app('window_bg')}; }}"
         )
+        if hasattr(self, "_close_btn"):
+            self._close_btn.setStyleSheet(self._ghost_btn_style())
+        for btn in self._target_buttons:
+            btn.setStyleSheet(self._accent_btn_style())
