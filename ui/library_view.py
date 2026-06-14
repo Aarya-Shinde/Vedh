@@ -127,15 +127,16 @@ class LibraryView(QWidget):
         topbar = self._build_topbar()
         layout.addWidget(topbar)
 
+        # Divider
+        self.divider = QWidget()
+        self.divider.setFixedHeight(1)
+        self.divider.setStyleSheet(f"background: {self.theme.app('divider')};")
+        layout.addWidget(self.divider)
+
         # Toolbar for search/sort/filter
+        layout.addSpacing(12)
         toolbar = self._build_toolbar()
         layout.addWidget(toolbar)
-
-        # Divider
-        div = QWidget()
-        div.setFixedHeight(1)
-        div.setStyleSheet(f"background: {self.theme.app('divider')};")
-        layout.addWidget(div)
 
         # Scroll area for content
         self.scroll = QScrollArea()
@@ -161,16 +162,12 @@ class LibraryView(QWidget):
 
     def _build_topbar(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(54)
+        bar.setFixedHeight(60)
         bar_layout = QHBoxLayout(bar)
         bar_layout.setContentsMargins(24, 0, 24, 0)
 
-        title = QLabel("Library")
-        title.setStyleSheet(
-            f"font-size: 18px; font-weight: 600; "
-            f"color: {self.theme.app('text_primary')};"
-        )
-        bar_layout.addWidget(title)
+        self.title_label = QLabel("Library")
+        bar_layout.addWidget(self.title_label)
         bar_layout.addStretch()
 
         # Selection controls container
@@ -185,7 +182,7 @@ class LibraryView(QWidget):
         self.delete_selected_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_selected_btn.setStyleSheet(f"""
             QPushButton {{
-                background: #C0392B;
+                background: {self.theme.app('danger')};
                 color: #FFFFFF;
                 border: none;
                 border-radius: 6px;
@@ -194,7 +191,7 @@ class LibraryView(QWidget):
                 font-weight: 500;
             }}
             QPushButton:hover {{
-                background: #A93226;
+                background: {self.theme.app('danger')}dd;
             }}
             QPushButton:disabled {{
                 background: {self.theme.app('divider')};
@@ -253,19 +250,21 @@ class LibraryView(QWidget):
         return bar
 
     def _ghost_btn_style(self) -> str:
+        t = self.theme
         return f"""
             QPushButton {{
                 background: transparent;
-                color: {self.theme.app('text_secondary')};
-                border: 1px solid {self.theme.app('divider')};
+                color: {t.app('text_secondary')};
+                border: 1px solid {t.app('divider')};
                 border-radius: 6px;
                 padding: 0 18px;
                 font-size: 13px;
                 font-weight: 500;
             }}
             QPushButton:hover {{
-                background: {self.theme.app('sidebar_hover')};
-                color: {self.theme.app('text_primary')};
+                background: {t.app('sidebar_hover')};
+                color: {t.app('text_primary')};
+                border-color: {t.app('accent')};
             }}
         """
 
@@ -552,6 +551,23 @@ class LibraryView(QWidget):
         except Exception:
             meta = BookMetadata(title=p.stem, author="Unknown")
 
+        # If there's no cover image in file itself, fetch it from metadata api
+        if not meta.cover_data:
+            try:
+                from core.metadata_fetcher import MetadataFetcher
+                fetcher = MetadataFetcher()
+                fetched = fetcher.fetch(
+                    title=meta.title,
+                    author=meta.author or "",
+                    book_type="unknown",
+                    file_path=file_path,
+                    format=fmt
+                )
+                if fetched and fetched.cover_data:
+                    meta.cover_data = fetched.cover_data
+            except Exception as e:
+                print(f"[Import] Failed to fetch cover from metadata API: {e}")
+
         # Get image ratio for PDF manga detection
         img_ratio = 0.0
         if fmt == "pdf":
@@ -634,9 +650,85 @@ class LibraryView(QWidget):
     # ── Theme ──────────────────────────────────────────────────────────────
 
     def _apply_theme(self):
+        t = self.theme
         self.setStyleSheet(
-            f"LibraryView {{ background: {self.theme.app('window_bg')}; }}"
+            f"LibraryView {{ background: {t.app('window_bg')}; }}"
         )
         self.grid_container.setStyleSheet(
-            f"background: {self.theme.app('window_bg')};"
+            f"background: {t.app('window_bg')};"
         )
+        if hasattr(self, "divider"):
+            self.divider.setStyleSheet(f"background: {t.app('divider')};")
+        if hasattr(self, "scroll"):
+            self.scroll.setStyleSheet(f"""
+                QScrollArea {{
+                    border: none;
+                    background: {t.app('window_bg')};
+                }}
+            """)
+            self.scroll.viewport().setStyleSheet(f"background: {t.app('window_bg')};")
+        if hasattr(self, "title_label"):
+            self.title_label.setStyleSheet(
+                f"font-size: 18px; font-weight: 600; "
+                f"color: {t.app('text_primary')}; background: transparent;"
+            )
+        if hasattr(self, "search_input"):
+            self.search_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background: {t.app('card_bg')};
+                    color: {t.app('text_primary')};
+                    border: 1px solid {t.app('card_border')};
+                    border-radius: 6px;
+                    padding-left: 10px;
+                    font-size: 13px;
+                }}
+            """)
+        if hasattr(self, "sort_combo"):
+            self.sort_combo.setStyleSheet(self._combo_style())
+        if hasattr(self, "filter_combo"):
+            self.filter_combo.setStyleSheet(self._combo_style())
+
+        # Unify button styles
+        is_dark = "Dark" in t.app("name", "dark")
+        primary_text = "#181614" if is_dark else "#FFFFFF"
+        
+        if hasattr(self, "import_btn"):
+            self.import_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {t.app('accent')};
+                    color: {primary_text};
+                    border: none;
+                    border-radius: 6px;
+                    padding: 0 18px;
+                    font-size: 13px;
+                    font-weight: 500;
+                }}
+                QPushButton:hover {{
+                    background: {t.app('accent_hover')};
+                }}
+            """)
+        
+        if hasattr(self, "select_btn"):
+            self.select_btn.setStyleSheet(self._ghost_btn_style())
+        if hasattr(self, "cancel_select_btn"):
+            self.cancel_select_btn.setStyleSheet(self._ghost_btn_style())
+            
+        if hasattr(self, "delete_selected_btn"):
+            self.delete_selected_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {t.app('danger')};
+                    color: #FFFFFF;
+                    border: none;
+                    border-radius: 6px;
+                    padding: 0 18px;
+                    font-size: 13px;
+                    font-weight: 500;
+                }}
+                QPushButton:hover {{
+                    background: {t.app('danger')}ee;
+                }}
+                QPushButton:disabled {{
+                    background: {t.app('divider')};
+                    color: {t.app('text_muted')};
+                }}
+            """)
