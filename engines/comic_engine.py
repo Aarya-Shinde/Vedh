@@ -86,7 +86,7 @@ class ComicEngine:
                     "archive_member": name
                 })
 
-            metadata = self._extract_metadata_basic(path)
+            metadata = self._extract_metadata_rar(path, rf)
             # Fetch cover from the first page
             if image_names:
                 try:
@@ -120,7 +120,7 @@ class ComicEngine:
                     "file_path": img_path
                 })
 
-            metadata = self._extract_metadata_basic(path)
+            metadata = self._extract_metadata_dir(path, tmp_dir)
             # Fetch cover from the first page
             if image_paths:
                 try:
@@ -219,6 +219,26 @@ class ComicEngine:
                 pass
         return self._extract_metadata_basic(path)
 
+    def _extract_metadata_rar(
+        self, path: Path, rf: rarfile.RarFile
+    ) -> BookMetadata:
+        if "ComicInfo.xml" in rf.namelist():
+            try:
+                return self._parse_comicinfo(rf.read("ComicInfo.xml"), path)
+            except Exception:
+                pass
+        return self._extract_metadata_basic(path)
+
+    def _extract_metadata_dir(
+        self, path: Path, directory: Path
+    ) -> BookMetadata:
+        for p in directory.rglob("ComicInfo.xml"):
+            try:
+                return self._parse_comicinfo(p.read_bytes(), path)
+            except Exception:
+                pass
+        return self._extract_metadata_basic(path)
+
     def _parse_comicinfo(self, xml_data: bytes, path: Path) -> BookMetadata:
         import xml.etree.ElementTree as ET
         root = ET.fromstring(xml_data)
@@ -232,11 +252,21 @@ class ComicEngine:
         publisher = get("Publisher")
         summary   = get("Summary")
 
+        # Additional fields
+        genre = get("Genre")
+        tags = []
+        if genre:
+            tags = [t.strip().lower() for t in genre.split(",") if t.strip()]
+
+        language = get("LanguageISO") or "en"
+        
         return BookMetadata(
             title=title,
             author=author,
             publisher=publisher,
             description=summary,
+            language=language,
+            tags=tags,
         )
 
     def _extract_metadata_basic(self, path: Path) -> BookMetadata:
