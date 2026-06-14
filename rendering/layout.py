@@ -56,12 +56,12 @@ class LayoutEngine:
             self._margin_bottom = 0.0
             self._page_width    = viewport_width
         else:
-            self._margin_h      = float(theme.get("margin_h", 48.0))
+            self._margin_h      = float(theme.get("margin_h", 100.0))
             self._margin_top    = float(theme.get("margin_v", 40.0))
             self._margin_bottom = float(theme.get("margin_v", 40.0))
             # Content width = viewport minus horizontal margins
             self._page_width = min(
-                float(theme.get("page_width", 750)),
+                float(theme.get("page_width", 900)),
                 viewport_width - self._margin_h * 2,
             )
 
@@ -149,7 +149,31 @@ class LayoutEngine:
 
         # Content origin — centered with margins
         x = page_start_x + self._margin_h
-        y = float(self._margin_top)
+
+        # Center vertically if dedication page
+        is_dedication_page = any(block.attrs.get("is_dedication") for block in blocks)
+        if is_dedication_page:
+            from PyQt6.QtGui import QPixmap
+            dummy_pixmap = QPixmap(1, 1)
+            dummy_painter = QPainter(dummy_pixmap)
+            total_h = 0.0
+            for block in blocks:
+                if block.type == BlockType.PAGE_BREAK:
+                    continue
+                elif block.type == BlockType.IMAGE:
+                    consumed = self._image_renderer.draw_block(
+                        dummy_painter, block, x, 0,
+                        viewport_height=self._page_height,
+                    )
+                else:
+                    consumed = self._text_renderer.draw_block(
+                        dummy_painter, block, x, 0
+                    )
+                total_h += consumed
+            dummy_painter.end()
+            y = max(float(self._margin_top), (self._page_height - total_h) / 2.0)
+        else:
+            y = float(self._margin_top)
 
         for block in blocks:
             if block.type == BlockType.PAGE_BREAK:
