@@ -45,9 +45,9 @@ class ThemeManager:
         # Load other settings from config into self._reader_theme
         self._reader_theme["font_family"] = cfg.get("font_family", "Georgia")
         self._reader_theme["font_size"] = cfg.get("font_size", 18.0)
-        self._reader_theme["line_spacing"] = cfg.get("line_spacing", 1.6)
-        self._reader_theme["page_width"] = cfg.get("page_width", 750.0)
-        self._reader_theme["margin_h"] = cfg.get("margin_h", 48.0)
+        self._reader_theme["line_spacing"] = cfg.get("line_spacing", 2.0)
+        self._reader_theme["page_width"] = cfg.get("page_width", 900.0)
+        self._reader_theme["margin_h"] = cfg.get("margin_h", 100.0)
         self._reader_theme["margin_v"] = cfg.get("margin_v", 40.0)
 
     # ── Accessors ──────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ class ThemeManager:
                 background-color: {t.get('window_bg', '#0F0F0F')};
                 color: {t.get('text_primary', '#EEEEEE')};
                 font-family: 'Inter', 'Segoe UI', sans-serif;
-                font-size: 13px;
+                font-size: 14px;
             }}
             QScrollBar:vertical {{
                 background: {t.get('window_bg', '#0F0F0F')};
