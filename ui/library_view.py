@@ -111,6 +111,7 @@ class LibraryView(QWidget):
         self._books = []
         self._selection_mode = False
         self._selected_books = set()
+        self.setAcceptDrops(True)
 
         self._build_ui()
         self._apply_theme()
@@ -732,3 +733,45 @@ class LibraryView(QWidget):
                     color: {t.app('text_muted')};
                 }}
             """)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        urls = event.mimeData().urls()
+        success_count = 0
+        from ui.widgets.toast import ToastManager
+        from pathlib import Path
+
+        for url in urls:
+            file_path = url.toLocalFile()
+            if not file_path:
+                continue
+
+            p = Path(file_path)
+            if p.is_file() and p.suffix.lower().lstrip(".") in ("epub", "pdf", "cbz", "cbr", "cb7", "cbt"):
+                try:
+                    self._import_file(file_path)
+                    success_count += 1
+                except Exception as e:
+                    ToastManager.get_instance().show(
+                        f"Failed to import {p.name}: {e}", "error"
+                    )
+
+        if success_count > 0:
+            ToastManager.get_instance().show(
+                f"Successfully imported {success_count} book(s)!", "success"
+            )
+            self._load_library()
+            event.acceptProposedAction()
+        else:
+            event.ignore()
