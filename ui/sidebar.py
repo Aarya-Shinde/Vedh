@@ -14,10 +14,10 @@ from storage.repositories import CollectionRepository
 # ── Top nav items ──────────────────────────────────────────────────────────
 
 NAV_ITEMS = [
-    ("home",       "Home",       "•"),
-    ("library",    "Library",    "•"),
-    ("statistics", "Statistics", "•"),
-    ("settings",   "Settings",   "•"),
+    ("home",       "Home",       ""),
+    ("library",    "Library",    ""),
+    ("statistics", "Statistics", ""),
+    ("settings",   "Settings",   ""),
 ]
 
 
@@ -31,12 +31,11 @@ class NavButton(QPushButton):
         self._active    = False
         self._collapsed = False
 
-        self.setFixedHeight(44)
+        self.setFixedHeight(40)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 0, 16, 0)
 
         self.icon_label = QLabel(icon)
         self.icon_label.setFixedWidth(20)
@@ -45,9 +44,15 @@ class NavButton(QPushButton):
 
         self.text_label = QLabel(label)
         self.text_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; "
+            f"font-size: 14px; font-weight: 500; "
             f"color: {theme.app('sidebar_text')}; background: transparent;"
         )
+
+        if not icon or icon == "•":
+            self.icon_label.hide()
+            layout.setSpacing(0)
+        else:
+            layout.setSpacing(12)
 
         layout.addWidget(self.icon_label)
         layout.addWidget(self.text_label)
@@ -74,17 +79,16 @@ class NavButton(QPushButton):
         if self._active:
             bg     = t.app("sidebar_hover")
             color  = t.app("sidebar_text_active")
-            border = f"border-left: 3px solid {t.app('sidebar_accent')};"
         else:
             bg     = "transparent"
             color  = t.app("sidebar_text")
-            border = "border-left: 3px solid transparent;"
 
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {bg};
-                {border}
-                border-radius: 0px;
+                border: none;
+                border-radius: 8px;
+                margin: 2px 10px;
                 text-align: left;
             }}
             QPushButton:hover {{
@@ -92,7 +96,7 @@ class NavButton(QPushButton):
             }}
         """)
         self.text_label.setStyleSheet(
-            f"font-size: 13px; font-weight: 500; "
+            f"font-size: 14px; font-weight: 500; "
             f"color: {color}; background: transparent;"
         )
 
@@ -131,8 +135,7 @@ class CollectionItem(QWidget):
         self.setAcceptDrops(True)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 0, 12, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(24, 0, 12, 0)
 
         self.icon_label = QLabel(icon)
         self.icon_label.setFixedWidth(18)
@@ -140,9 +143,15 @@ class CollectionItem(QWidget):
 
         self.name_label = QLabel(name)
         self.name_label.setStyleSheet(
-            f"font-size: 12px; color: {theme.app('sidebar_text')}; "
+            f"font-size: 13px; color: {theme.app('sidebar_text')}; "
             f"background: transparent;"
         )
+
+        if not icon or icon == "•":
+            self.icon_label.hide()
+            layout.setSpacing(0)
+        else:
+            layout.setSpacing(10)
 
         layout.addWidget(self.icon_label)
         layout.addWidget(self.name_label)
@@ -263,7 +272,7 @@ class CollectionItem(QWidget):
             else t.app("sidebar_text")
         )
         self.name_label.setStyleSheet(
-            f"font-size: 12px; color: {color}; background: transparent;"
+            f"font-size: 13px; color: {color}; background: transparent;"
         )
 
 
@@ -300,14 +309,10 @@ class Sidebar(QWidget):
         header = QWidget()
         header.setFixedHeight(60)
         self.header_layout = QHBoxLayout(header)
-        self.header_layout.setContentsMargins(20, 0, 8, 0)
+        self.header_layout.setContentsMargins(24, 0, 8, 0)
         
-        self.title = QLabel("Vedh")
-        self.title.setStyleSheet(
-            f"font-size: 20px; font-weight: 700; "
-            f"color: {self.theme.app('text_primary')}; "
-            f"letter-spacing: 1px; background: transparent;"
-        )
+        self.title = QLabel()
+        self.title.setStyleSheet("background: transparent;")
         self.header_layout.addWidget(self.title)
         
         self.toggle_btn = QPushButton("◀")
@@ -338,10 +343,10 @@ class Sidebar(QWidget):
         self.col_header = QWidget()
         self.col_header.setFixedHeight(32)
         chl = QHBoxLayout(self.col_header)
-        chl.setContentsMargins(16, 0, 12, 0)
+        chl.setContentsMargins(24, 0, 12, 0)
         self.col_label = QLabel("Collections")
         self.col_label.setStyleSheet(
-            f"font-size: 10px; font-weight: 600; "
+            f"font-size: 11px; font-weight: 600; "
             f"text-transform: uppercase; letter-spacing: 1px; "
             f"color: {self.theme.app('text_muted')};"
         )
@@ -571,18 +576,27 @@ class Sidebar(QWidget):
             f"border-right: 1px solid {t.app('divider')}; }}"
         )
         
+        # Stylish Logo: V (pink) + edh (primary text)
+        v_color = "#E06D83"
+        edh_color = t.app("text_primary")
+        self.title.setText(
+            f'<span style="color: {v_color}; font-family: \'Motterdam\'; font-weight: 800; font-size: 34px;">V</span>'
+            f'<span style="color: {edh_color}; font-family: \'Motterdam\'; font-weight: 600; font-size: 26px; letter-spacing: 0.5px;">edh</span>'
+        )
+        
         self.div1.setStyleSheet(f"background: {t.app('divider')};")
         self.div2.setStyleSheet(f"background: {t.app('divider')};")
         
         self.toggle_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {t.app('text_muted')};
+                color: #E06D83;
                 border: none;
-                font-size: 11px;
+                font-size: 13px;
+                font-weight: bold;
             }}
             QPushButton:hover {{
-                color: {t.app('accent')};
+                color: {t.app('accent_hover')};
             }}
         """)
 
