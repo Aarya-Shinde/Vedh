@@ -39,21 +39,28 @@ class BookRepository:
 
         if file_hash:
             conn = get_connection()
-            dup = conn.execute("SELECT id, title, file_path, status FROM books WHERE hash = ?", (file_hash,)).fetchone()
+            dup = conn.execute("SELECT id, title, file_path, status, cover FROM books WHERE hash = ?", (file_hash,)).fetchone()
             conn.close()
             if dup:
-                from pathlib import Path
-                if dup["status"] == "missing" or not Path(dup["file_path"]).exists():
-                    conn = get_connection()
-                    with conn:
-                        conn.execute(
-                            "UPDATE books SET file_path = ?, status = 'ok', updated_at = ? WHERE id = ?",
-                            (file_path, datetime.now().isoformat(), dup["id"])
-                        )
-                    conn.close()
-                    return dup["id"]
-                else:
-                    raise ValueError(f"Book already exists: '{dup['title']}'")
+                cover_val = dup["cover"]
+                if metadata.cover_data and not cover_val:
+                    cover_val = save_cover_image(dup["id"], metadata.cover_data)
+                
+                conn = get_connection()
+                with conn:
+                    conn.execute("""
+                        UPDATE books 
+                        SET title = ?, author = ?, cover = COALESCE(?, cover), 
+                            file_path = ?, status = 'ok', language = ?, 
+                            publisher = ?, description = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (
+                        metadata.title, metadata.author, cover_val,
+                        file_path, metadata.language, metadata.publisher,
+                        metadata.description, datetime.now().isoformat(), dup["id"]
+                    ))
+                conn.close()
+                return dup["id"]
 
         book_id = str(uuid.uuid4())
         tags = json.dumps(metadata.tags)
@@ -528,3 +535,58 @@ class StatsRepository:
         """).fetchone()
         conn.close()
         return row["day_name"] if row else "N/A"
+
+
+class ArtRepository:
+
+    def get_all(self) -> list:
+        conn = get_connection()
+        rows = conn.execute("SELECT * FROM art_creations ORDER BY created_at DESC").fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def add(self, title: str, description: str, src_image_path: str) -> str:
+        import uuid
+        import shutil
+        from pathlib import Path
+        
+        art_id = str(uuid.uuid4())
+        
+        # Determine target path inside ~/.vedh/art
+        art_dir = Path.home() / ".vedh" / "art"
+        art_dir.mkdir(parents=True, exist_ok=True)
+        
+        suffix = Path(src_image_path).suffix or ".png"
+        target_filename = f"{art_id}{suffix}"
+        target_path = art_dir / target_filename
+        
+        # Copy file
+        shutil.copy2(src_image_path, target_path)
+        
+        conn = get_connection()
+        with conn:
+            conn.execute("""
+                INSERT INTO art_creations (id, title, description, image_path)
+                VALUES (?, ?, ?, ?)
+            """, (art_id, title, description, str(target_path)))
+        conn.close()
+        
+        return art_id
+
+    def delete(self, art_id: str):
+        from pathlib import Path
+        
+        conn = get_connection()
+        row = conn.execute("SELECT image_path FROM art_creations WHERE id = ?", (art_id,)).fetchone()
+        
+        if row:
+            image_path = Path(row["image_path"])
+            if image_path.exists():
+                try:
+                    image_path.unlink()
+                except Exception:
+                    pass
+                    
+            with conn:
+                conn.execute("DELETE FROM art_creations WHERE id = ?", (art_id,))
+        conn.close()
