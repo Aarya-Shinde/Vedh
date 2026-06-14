@@ -442,13 +442,46 @@ class ReaderCanvas(QWidget):
         if not self._engine or self._engine.total_pages == 0:
             super().wheelEvent(event)
             return
-            
+
+        import time
+        now = time.time()
+        if not hasattr(self, "_last_scroll_page_time"):
+            self._last_scroll_page_time = 0.0
+
         max_scroll, _ = self._get_scroll_range()
-        if max_scroll <= 0:
-            super().wheelEvent(event)
-            return
-            
         delta = event.angleDelta().y()
+
+        if max_scroll <= 0:
+            if now - self._last_scroll_page_time < 0.4:
+                event.accept()
+                return
+            if not hasattr(self, "_wheel_accumulator"):
+                self._wheel_accumulator = 0.0
+            self._wheel_accumulator += delta
+            
+            threshold = 120
+            if self._wheel_accumulator <= -threshold:
+                self._wheel_accumulator = 0.0
+                if self._page_num < self._engine.total_pages - 1:
+                    parent = self.parent()
+                    while parent and not hasattr(parent, "next_page"):
+                        parent = parent.parent()
+                    if parent:
+                        self._last_scroll_page_time = now
+                        parent.next_page()
+            elif self._wheel_accumulator >= threshold:
+                self._wheel_accumulator = 0.0
+                if self._page_num > 0:
+                    parent = self.parent()
+                    while parent and not hasattr(parent, "prev_page"):
+                        parent = parent.parent()
+                    if parent:
+                        self._last_scroll_page_time = now
+                        parent.prev_page()
+            event.accept()
+            return
+
+        # Regular scrolling with page transition boundaries
         scroll_amount = -delta
         new_scroll = self._scroll_y + scroll_amount
         
@@ -457,11 +490,15 @@ class ReaderCanvas(QWidget):
                 self._scroll_y = 0.0
                 self.update()
             else:
+                if now - self._last_scroll_page_time < 0.4:
+                    event.accept()
+                    return
                 if self._page_num > 0:
                     parent = self.parent()
                     while parent and not hasattr(parent, "prev_page"):
                         parent = parent.parent()
                     if parent:
+                        self._last_scroll_page_time = now
                         parent.prev_page()
                         prev_max_scroll, _ = self._get_scroll_range()
                         self._scroll_y = prev_max_scroll
@@ -471,12 +508,16 @@ class ReaderCanvas(QWidget):
                 self._scroll_y = max_scroll
                 self.update()
             else:
+                if now - self._last_scroll_page_time < 0.4:
+                    event.accept()
+                    return
                 if self._page_num < self._engine.total_pages - 1:
                     self._scroll_y = 0.0
                     parent = self.parent()
                     while parent and not hasattr(parent, "next_page"):
                         parent = parent.parent()
                     if parent:
+                        self._last_scroll_page_time = now
                         parent.next_page()
                 else:
                     self._scroll_y = max_scroll
