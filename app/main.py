@@ -39,6 +39,10 @@ def main():
             QFontDatabase.addApplicationFont(str(lora_reg))
         if lora_ital.exists():
             QFontDatabase.addApplicationFont(str(lora_ital))
+            
+        motterdam_path = font_dir / "motterdam.ttf"
+        if motterdam_path.exists():
+            QFontDatabase.addApplicationFont(str(motterdam_path))
     except Exception as e:
         print(f"Failed to load bundled fonts: {e}")
 
