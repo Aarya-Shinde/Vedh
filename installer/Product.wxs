@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <!-- Define the product details. Replace GUIDs if deploying a new official release. -->
+    <Product Id="*" Name="Vedh" Language="1033" Version="1.0.0.0" Manufacturer="Aarya Shinde" UpgradeCode="a6b86d9e-128a-4d2c-81ba-70efea96ff3c">
+        <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+
+        <!-- Automatic Major Upgrades: Uninstall previous versions cleanly before installing new versions -->
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <!-- Directory Structure Definition -->
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <!-- C:\Program Files\Vedh -->
+                <Directory Id="INSTALLFOLDER" Name="Vedh" />
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <!-- Start Menu Directory -->
+                <Directory Id="ApplicationProgramsFolder" Name="Vedh" />
+            </Directory>
+            <Directory Id="DesktopFolder" Name="Desktop" />
+        </Directory>
+
+        <!-- Start Menu folder lifecycle cleanup and shortcuts -->
+        <DirectoryRef Id="ApplicationProgramsFolder">
+            <Component Id="ApplicationShortcutMenu" Guid="e8f8a9e0-128a-4d2c-81ba-70efea96ff3f">
+                <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="Vedh" Target="[INSTALLFOLDER]Vedh.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+                <RemoveFolder Id="CleanUpShortcuts" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\AaryaShinde\Vedh" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="DesktopFolder">
+            <Component Id="ApplicationShortcutDesktop" Guid="d8f8a9e0-128a-4d2c-81ba-70efea96ff3e">
+                <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="Vedh" Target="[INSTALLFOLDER]Vedh.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+                <RegistryValue Root="HKCU" Key="Software\AaryaShinde\Vedh" Name="desktop_shortcut" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+
+        <!-- Features selection mapping -->
+        <Feature Id="ProductFeature" Title="Vedh Application" Level="1">
+            <ComponentRef Id="ApplicationShortcutMenu" />
+            <ComponentRef Id="ApplicationShortcutDesktop" />
+            <!-- AppFilesGroup is automatically harvested from the PyInstaller folder using WiX Heat -->
+            <ComponentGroupRef Id="AppFilesGroup" />
+        </Feature>
+
+        <!-- App Icon Definition -->
+        <Icon Id="AppIcon.ico" SourceFile="assets\images\lotus.ico" />
+
+        <!-- Setup Wizard UI flow configuration (Includes License, Directory picker, progress bar) -->
+        <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+        <UIRef Id="WixUI_InstallDir" />
+
+        <!-- Optional: To customize installer graphics, uncomment these lines and supply BMP files: -->
+        <!--
+        <WixVariable Id="WixUIBannerBmp" Value="installer\banner.bmp" />
+        <WixVariable Id="WixUIDialogBmp" Value="installer\dialog.bmp" />
+        -->
+    </Product>
+</Wix>
