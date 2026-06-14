@@ -141,9 +141,9 @@ class SettingsView(QWidget):
 
         # Header
         self.header_bar = QWidget()
-        self.header_bar.setFixedHeight(54)
+        self.header_bar.setFixedHeight(60)
         bar_layout = QHBoxLayout(self.header_bar)
-        bar_layout.setContentsMargins(32, 0, 32, 0)
+        bar_layout.setContentsMargins(24, 0, 24, 0)
         self.title_label = QLabel("Settings")
         self.title_label.setStyleSheet("font-size: 18px; font-weight: 600; background: transparent;")
         bar_layout.addWidget(self.title_label)
@@ -157,7 +157,9 @@ class SettingsView(QWidget):
 
         outer.addWidget(self.header_bar)
 
-        self.div_line = Divider(self.theme)
+        self.div_line = QWidget()
+        self.div_line.setFixedHeight(1)
+        self.div_line.setStyleSheet(f"background: {self.theme.app('divider')};")
         outer.addWidget(self.div_line)
 
         # Scroll Area
@@ -441,7 +443,7 @@ class SettingsView(QWidget):
         row = SliderRow(
             "Line Spacing",
             minimum=1.0, maximum=3.0,
-            value=float(self.theme.reader("line_spacing", 1.6)),
+            value=float(self.theme.reader("line_spacing", 2.0)),
             step=0.1, suffix="x",
             theme=self.theme,
         )
@@ -454,7 +456,7 @@ class SettingsView(QWidget):
         row = SliderRow(
             "Page Width",
             minimum=400, maximum=1000,
-            value=float(self.theme.reader("page_width", 750)),
+            value=float(self.theme.reader("page_width", 900)),
             step=10, suffix="px",
             theme=self.theme,
         )
@@ -465,7 +467,7 @@ class SettingsView(QWidget):
         row = SliderRow(
             "Horizontal Margin",
             minimum=20, maximum=150,
-            value=float(self.theme.reader("margin_h", 48.0)),
+            value=float(self.theme.reader("margin_h", 100.0)),
             step=2, suffix="px",
             theme=self.theme,
         )
@@ -645,6 +647,25 @@ class SettingsView(QWidget):
 
     # ── Styling helpers ────────────────────────────────────────────────────
 
+    def _ghost_btn_style(self) -> str:
+        t = self.theme
+        return f"""
+            QPushButton {{
+                background: transparent;
+                color: {t.app('text_secondary')};
+                border: 1px solid {t.app('divider')};
+                border-radius: 6px;
+                padding: 0 16px;
+                font-size: 13px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background: {t.app('sidebar_hover')};
+                color: {t.app('text_primary')};
+                border-color: {t.app('accent')};
+            }}
+        """
+
     def _style_toggle(self, btn: QPushButton, active: bool):
         t = self.theme
         if active:
@@ -758,17 +779,22 @@ class SettingsView(QWidget):
             }}
         """)
 
+        if hasattr(self, "div_line"):
+            self.div_line.setStyleSheet(f"background: {t.app('divider')};")
+
         # Style save button specifically
+        is_dark = "Dark" in t.app("name", "dark")
+        primary_text = "#181614" if is_dark else "#FFFFFF"
         if hasattr(self, "save_user_btn"):
             self.save_user_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {t.app('accent')};
-                    color: #FFFFFF;
+                    color: {primary_text};
                     border: none;
                     border-radius: 6px;
                     padding: 0 16px;
                     font-weight: 500;
-                    font-size: 12px;
+                    font-size: 13px;
                 }}
                 QPushButton:hover {{
                     background: {t.app('accent_hover')};
@@ -785,7 +811,7 @@ class SettingsView(QWidget):
                     border-radius: 6px;
                     padding: 0 16px;
                     font-weight: 500;
-                    font-size: 12px;
+                    font-size: 13px;
                 }}
                 QPushButton:hover {{
                     background: {t.app('danger', '#C0392B')};
@@ -795,55 +821,15 @@ class SettingsView(QWidget):
 
         # Style warning stats button
         if hasattr(self, "clear_stats_btn"):
-            self.clear_stats_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    color: {t.app('text_secondary')};
-                    border: 1px solid {t.app('divider')};
-                    border-radius: 6px;
-                    padding: 0 16px;
-                    font-weight: 500;
-                    font-size: 12px;
-                }}
-                QPushButton:hover {{
-                    background: {t.app('sidebar_hover')};
-                    color: {t.app('text_primary')};
-                }}
-            """)
+            self.clear_stats_btn.setStyleSheet(self._ghost_btn_style())
 
         # Style open config folder button specifically
         if hasattr(self, "open_btn"):
-            self.open_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    color: {t.app('accent')};
-                    border: 1px solid {t.app('accent')};
-                    border-radius: 6px;
-                    font-size: 12px;
-                    font-weight: 500;
-                }}
-                QPushButton:hover {{
-                    background: {t.app('accent')};
-                    color: #FFFFFF;
-                }}
-            """)
+            self.open_btn.setStyleSheet(self._ghost_btn_style())
 
         # Style reset defaults button
         if hasattr(self, "reset_defaults_btn"):
-            self.reset_defaults_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent;
-                    color: {t.app('text_secondary')};
-                    border: 1px solid {t.app('divider')};
-                    border-radius: 6px;
-                    padding: 0 12px;
-                    font-size: 11px;
-                }}
-                QPushButton:hover {{
-                    color: {t.app('accent')};
-                    border-color: {t.app('accent')};
-                }}
-            """)
+            self.reset_defaults_btn.setStyleSheet(self._ghost_btn_style())
 
         self._update_accent_buttons()
         self._update_theme_buttons()
@@ -862,9 +848,9 @@ class SettingsView(QWidget):
             cfg.set("reader_theme", "default")
             cfg.set("font_family", "Georgia")
             cfg.set("font_size", 18.0)
-            cfg.set("line_spacing", 1.6)
-            cfg.set("page_width", 750.0)
-            cfg.set("margin_h", 48.0)
+            cfg.set("line_spacing", 2.0)
+            cfg.set("page_width", 900.0)
+            cfg.set("margin_h", 100.0)
             cfg.set("margin_v", 40.0)
             cfg.set("auto_classify", True)
             cfg.set("auto_assign", True)
@@ -877,9 +863,9 @@ class SettingsView(QWidget):
             self.reader_theme_changed.emit("default")
             self.font_changed.emit("Georgia")
             self.font_size_changed.emit(18.0)
-            self.line_spacing_changed.emit(1.6)
-            self.page_width_changed.emit(750.0)
-            self.margin_h_changed.emit(48.0)
+            self.line_spacing_changed.emit(2.0)
+            self.page_width_changed.emit(900.0)
+            self.margin_h_changed.emit(100.0)
             self.margin_v_changed.emit(40.0)
 
             # Rebuild widgets with default values
