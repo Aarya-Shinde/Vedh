@@ -130,6 +130,17 @@ def init_db():
         except Exception:
             pass
 
+        # Create art_creations table if not exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS art_creations (
+                id          TEXT PRIMARY KEY,
+                title       TEXT NOT NULL,
+                description TEXT,
+                image_path  TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
+
         # Seed default collections if not already present
         _seed_defaults(conn)
         _sync_status_collections(conn)
