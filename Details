@@ -1,70 +1,101 @@
+Vedh — Project Architecture & Directory Details
+
+This document outlines the folder structure, module purposes, and developer notes for Vedh.
+
+========================================================================
+📂 DIRECTORY STRUCTURE & MODULE DETAILS
+========================================================================
+
 vedh/
 │
+├── .github/
+│   └── workflows/
+│       └── release.yml        ← CI/CD pipeline: Automates PyInstaller compiles and GitHub Releases on tags (v*)
+│
 ├── app/
-│   └── main.py
+│   └── main.py                ← Main application entrypoint. Initializes database, loads fonts, themes, and views
 │
-├── ui/
-│   ├── main_window.py
-│   ├── sidebar.py
-│   ├── library_view.py
-│   ├── book_card.py
-│   ├── reader_view.py          ← created, empty
-│   └── settings.py             ← created, empty
+├── assets/                    ← Static files bundled with the application
+│   ├── fonts/                 ← Application fonts (Lora-Regular, Lora-Italic, motterdam, etc.)
+│   └── images/                ← UI icons, application logo, and the lotus window icon (lotus.ico)
 │
-├── core/
-│   ├── book_model.py
-│   ├── theme_manager.py
-│   └── plugin_manager.py
+├── core/                      ← Core non-UI business logic and managers
+│   ├── book_model.py          ← BookMetadata definitions and structural parser logic
+│   ├── config_manager.py      ← Reads/writes global configuration values (JSON)
+│   ├── plugin_manager.py      ← Registers and executes modular reader plugins
+│   ├── theme_manager.py       ← Loads and compiles active stylesheet rules (app and reader)
+│   └── updater.py             ← GitHub Release checker, thread-safe downloader, and SHA-256 hash verifier
 │
-├── engines/
-│   ├── epub_engine.py          ← created, empty
-│   ├── pdf_engine.py           ← created, empty
-│   └── comic_engine.py         ← created, empty
+├── engines/                   ← Content extraction engines for document formats
+│   ├── comic_engine.py        ← Handler for CBR/CBZ graphic novels and image sets
+│   ├── epub_engine.py         ← EPUB parser, resource extractor, and stylesheet processor
+│   └── pdf_engine.py          ← PDF document render pipeline
 │
-├── rendering/
-│   ├── text_renderer.py        ← created, empty
-│   ├── image_renderer.py       ← created, empty
-│   ├── layout.py               ← created, empty
-│   └── pagination/
-│       ├── engine.py           ← created, empty
-│       ├── measurer.py         ← created, empty
-│       └── cache.py            ← created, empty
+├── rendering/                 ← Flow layout engine and UI rendering routines
+│   ├── image_renderer.py      ← Renders and scales images/covers to preserve page constraints
+│   ├── layout.py              ← Manages margin calculations and text blocks
+│   ├── text_renderer.py       ← Renders and justifies multi-font text layout
+│   └── pagination/            ← Page distribution calculators
+│       ├── cache.py           ← Stores pre-paginated index bounds for instantaneous page turning
+│       ├── engine.py          ← Combines measurers and caches to paginate e-books
+│       └── measurer.py        ← Measures string size bounds on a graphics canvas
 │
-├── storage/
-│   ├── database.py
-│   └── repositories.py
+├── storage/                   ← Data persistence layers
+│   ├── database.py            ← Initializes SQLite DB schemas (~/.vedh/vedh.db)
+│   └── repositories.py        ← Repository classes for Books and Art creations
 │
-├── themes/
-│   ├── app/
-│   │   ├── dark.json
-│   │   └── light.json
-│   └── reader/
-│       ├── default.json
-│       ├── sepia.json
-│       └── night.json
+├── themes/                    ← Style definitions
+│   ├── app/                   ← UI theme layouts (dark.json, light.json)
+│   └── reader/                ← Reader canvas palettes (default.json, night.json, sepia.json)
 │
-├── plugins/                    ← empty, ready for plugins
+├── ui/                        ← PyQt6 UI views and widget components
+│   ├── widgets/               ← Reusable UI elements (toast.py, custom overlays)
+│   ├── art_view.py            ← 3D book-like artwork gallery and flip controls
+│   ├── book_card.py           ← Grid cards representing books in the library
+│   ├── convert_dialog.py      ← E-book conversion loading window
+│   ├── home_view.py           ← Dashboard showing reading statistics and book shortcuts
+│   ├── library_view.py        ← Book library grid, search, and import controls
+│   ├── main_window.py         ← Sidebar navigation shell and startup update check
+│   ├── metadata_dialog.py     ← Dialog to edit book details and fetch covers
+│   ├── reader_view.py         ← E-book reader canvas with dual-page book rendering
+│   ├── settings_view.py       ← Settings panel (themes, fonts, reset, update checking)
+│   ├── sidebar.py             ← Sidebar navigation controller
+│   └── toc_panel.py           ← Interactive Table of Contents sidebar for books
 │
-├── assets/                     ← empty, for fonts/icons later
+├── installer/                 ← Deployment resources
+│   ├── Product.wxs            ← WiX Toolset installer definition file
+│   └── License.rtf            ← End User License Agreement (EULA) screen RTF file
 │
-└── __init__.py
+├── venv/                      ← Local python virtual environment (excluded from git)
+│
+├── dist/                      ← Output directory for PyInstaller and WiX compilations (excluded from git)
+├── build/                     ← PyInstaller intermediate build cache (excluded from git)
+│
+├── updater.py                 ← Standalone python script compiled to updater.exe (clean-swaps binaries)
+├── Vedh.spec                  ← PyInstaller spec configuration file
+└── .gitignore                 ← Git exclusion rules (ignores cache, build, logs, database)
 
+========================================================================
+🎨 PALETTE COLORS REFERENCE
+========================================================================
 
-
-venv\Scripts\activate
-
-python app/main.py
-
-
-
-
-
-Pink: #E7717D
-
-Light Gray: #C2CAD0
-
-Beige-Gray: #C2B9B0
-
-Brown: #7E685A
-
+Pink:        #E7717D
+Light Gray:  #C2CAD0
+Beige-Gray:  #C2B9B0
+Brown:       #7E685A
 Light Green: #AFD275
+
+========================================================================
+🚀 AUTORELEASE & UPDATE SYSTEM
+========================================================================
+
+* GitHub Actions Workflow:
+  Compiles "updater.py" (console, onefile) and "app/main.py" (windowed, paths=".") into the dist/ directory.
+  Injects "updater.exe" into the application's root directory, zips it, calculates the SHA-256 hash, and drafts a release.
+
+* Self-Updater Client:
+  On launch, "main_window.py" runs an async check. If a release tag higher than v0.1.0 is found, it shows a toast message.
+  In settings, clicking "Check for Updates" displays a modal dialog, downloads the update file, verifies the hash, extracts the ZIP, launches "updater.exe", and exits.
+  "updater.exe" waits for the main app to close, wipes all old files (preserving ~/.vedh/ data), copies the new version files, and launches the updated Vedh.exe.
+
+  
