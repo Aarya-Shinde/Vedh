@@ -1,0 +1,55 @@
+name: Compile and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PyQt6 requests lxml pyphen pygame-ce
+
+      - name: Compile Standalone Updater
+        run: |
+          pyinstaller --name="updater" --console --onefile updater.py
+
+      - name: Compile Main Application
+        run: |
+          pyinstaller --name="Vedh" --windowed --noconfirm --clean --paths="." --add-data "assets;assets" --add-data "themes;themes" app/main.py
+
+      - name: Inject Updater into App Directory
+        shell: powershell
+        run: |
+          Copy-Item -Path dist\updater.exe -Destination dist\Vedh\
+
+      - name: Package Dist folder
+        shell: powershell
+        run: |
+          Compress-Archive -Path dist\Vedh\* -DestinationPath dist\Vedh_Windows.zip
+
+      - name: Generate SHA-256 Checksum
+        shell: powershell
+        run: |
+          $hash = (Get-FileHash dist\Vedh_Windows.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  Vedh_Windows.zip" | Out-File -FilePath dist\checksums.txt -Encoding ascii
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Vedh_Windows.zip
+            dist/checksums.txt
+          token: ${{ secrets.GITHUB_TOKEN }}

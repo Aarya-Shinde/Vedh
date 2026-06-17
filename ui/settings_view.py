@@ -618,8 +618,9 @@ class SettingsView(QWidget):
             hl.addStretch()
             return w
 
+        from core.updater import CURRENT_VERSION
         layout.addWidget(info_row("Application",  "Vedh — The Premium E-Reader"))
-        layout.addWidget(info_row("Version",       "1.0.0"))
+        layout.addWidget(info_row("Version",       CURRENT_VERSION))
         layout.addWidget(info_row("Python",        __import__('sys').version.split()[0]))
         layout.addWidget(info_row("PyQt6",         __import__('PyQt6.QtCore', fromlist=['PYQT_VERSION_STR']).PYQT_VERSION_STR))
 
@@ -629,9 +630,97 @@ class SettingsView(QWidget):
         self.open_btn.setFixedWidth(160)
         self.open_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.open_btn.clicked.connect(self._open_config_folder)
-        layout.addWidget(self.open_btn)
+
+        # Update check button
+        self.update_btn = QPushButton("Check for Updates")
+        self.update_btn.setFixedHeight(34)
+        self.update_btn.setFixedWidth(160)
+        self.update_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.update_btn.clicked.connect(self._on_check_updates)
+
+        # Button row layout
+        btn_box = QWidget()
+        btn_layout = QHBoxLayout(btn_box)
+        btn_layout.setContentsMargins(0, 8, 0, 0)
+        btn_layout.setSpacing(10)
+        btn_layout.addWidget(self.open_btn)
+        btn_layout.addWidget(self.update_btn)
+        btn_layout.addStretch()
+        
+        layout.addWidget(btn_box)
 
         return container
+
+    def _on_check_updates(self):
+        from PyQt6.QtCore import QThread, pyqtSignal
+        self.update_btn.setEnabled(False)
+        self.update_btn.setText("Checking...")
+        
+        from core.updater import UpdateChecker
+        
+        class CheckWorker(QThread):
+            checked = pyqtSignal(str, str, str)
+            def run(self):
+                tag, zip_url, checksum_url = UpdateChecker.check_for_updates()
+                self.checked.emit(tag or "", zip_url or "", checksum_url or "")
+                
+        self._check_worker = CheckWorker(self)
+        self._check_worker.checked.connect(self._on_check_updates_finished)
+        self._check_worker.start()
+
+    def _on_check_updates_finished(self, tag: str, zip_url: str, checksum_url: str):
+        self.update_btn.setEnabled(True)
+        self.update_btn.setText("Check for Updates")
+        
+        if not tag:
+            QMessageBox.information(self, "Up to Date", "You are running the latest version of Vedh.")
+            return
+            
+        reply = QMessageBox.question(
+            self,
+            "Update Available",
+            f"A new version of Vedh (v{tag}) is available.\nWould you like to download and install it now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self._start_update_download(zip_url, checksum_url)
+
+    def _start_update_download(self, zip_url: str, checksum_url: str):
+        from PyQt6.QtWidgets import QProgressDialog
+        from core.updater import BackgroundDownloader, launch_updater_and_exit
+        
+        self.progress_dialog = QProgressDialog("Downloading update...", "Cancel", 0, 100, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setAutoClose(True)
+        self.progress_dialog.show()
+        
+        from pathlib import Path
+        download_dir = Path.home() / ".vedh" / "temp"
+        
+        self._downloader = BackgroundDownloader(zip_url, checksum_url, download_dir)
+        self._downloader.progress.connect(self.progress_dialog.setValue)
+        
+        def on_finished(success, message):
+            self.progress_dialog.close()
+            if success:
+                QMessageBox.information(
+                    self,
+                    "Download Complete",
+                    "The update was successfully downloaded. The application will now restart to complete installation."
+                )
+                launch_updater_and_exit(message)
+            else:
+                QMessageBox.critical(
+                    self,
+                    "Update Failed",
+                    f"Failed to install update:\n{message}"
+                )
+                
+        self._downloader.finished.connect(on_finished)
+        self.progress_dialog.canceled.connect(self._downloader.terminate)
+        self._downloader.start()
 
     def _open_config_folder(self):
         import subprocess, sys
@@ -826,6 +915,8 @@ class SettingsView(QWidget):
         # Style open config folder button specifically
         if hasattr(self, "open_btn"):
             self.open_btn.setStyleSheet(self._ghost_btn_style())
+        if hasattr(self, "update_btn"):
+            self.update_btn.setStyleSheet(self._ghost_btn_style())
 
         # Style reset defaults button
         if hasattr(self, "reset_defaults_btn"):

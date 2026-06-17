@@ -145,6 +145,10 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._apply_theme()
 
+        # Check for updates silently on startup after a short delay
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(3000, self._check_for_updates_async)
+
     # ── Build ──────────────────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -365,3 +369,26 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             f"QMainWindow {{ background: {self.theme.app('window_bg')}; }}"
         )
+
+    def _check_for_updates_async(self):
+        from PyQt6.QtCore import QThread, pyqtSignal
+        from core.updater import UpdateChecker
+        
+        class SilentCheckWorker(QThread):
+            checked = pyqtSignal(str, str, str)
+            def run(self):
+                tag, zip_url, checksum_url = UpdateChecker.check_for_updates()
+                self.checked.emit(tag or "", zip_url or "", checksum_url or "")
+                
+        self._silent_check_worker = SilentCheckWorker(self)
+        
+        def on_checked(tag, zip_url, checksum_url):
+            if tag:
+                from ui.widgets.toast import ToastManager
+                ToastManager.get_instance().show_toast(
+                    f"Update Available: v{tag} is ready! Check Settings to install.", 
+                    duration=10000
+                )
+                
+        self._silent_check_worker.checked.connect(on_checked)
+        self._silent_check_worker.start()

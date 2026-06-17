@@ -51,6 +51,7 @@
         <!-- Setup Wizard UI flow configuration (Includes License, Directory picker, progress bar) -->
         <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
         <UIRef Id="WixUI_InstallDir" />
+        <WixVariable Id="WixUILicenseRtf" Value="installer\License.rtf" />
 
         <!-- Optional: To customize installer graphics, uncomment these lines and supply BMP files: -->
         <!--
