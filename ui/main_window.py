@@ -385,9 +385,9 @@ class MainWindow(QMainWindow):
         def on_checked(tag, zip_url, checksum_url):
             if tag:
                 from ui.widgets.toast import ToastManager
-                ToastManager.get_instance().show_toast(
+                ToastManager.get_instance().show(
                     f"Update Available: v{tag} is ready! Check Settings to install.", 
-                    duration=10000
+                    "info"
                 )
                 
         self._silent_check_worker.checked.connect(on_checked)
