@@ -16,7 +16,7 @@ from core.plugin_manager import PluginManager
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Vedh")
-    app.setApplicationVersion("0.1.0")
+    app.setApplicationVersion("1.0.0")
 
     # Init DB
     init_db()

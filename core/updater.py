@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
-CURRENT_VERSION = "0.1.0"
+CURRENT_VERSION = "1.0.0"
 REPO_OWNER = "Aarya-Shinde"
 REPO_NAME = "Vedh"
 REPO_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"

@@ -382,7 +382,7 @@ class Sidebar(QWidget):
         outer.addWidget(self.scroll_area)
 
         # Version
-        self.version = QLabel("v0.1.0")
+        self.version = QLabel("v1.0.0")
         self.version.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.version.setStyleSheet(
             f"font-size: 11px; color: {self.theme.app('text_muted')}; padding: 10px;"
@@ -434,7 +434,7 @@ class Sidebar(QWidget):
         self.title.setVisible(not self._collapsed)
         self.col_header.setVisible(not self._collapsed)
         self.toggle_btn.setText("▶" if self._collapsed else "◀")
-        self.version.setText("" if self._collapsed else "v0.1.0")
+        self.version.setText("" if self._collapsed else "v1.0.0")
 
         if self._collapsed:
             self.header_layout.setContentsMargins(0, 0, 0, 0)
