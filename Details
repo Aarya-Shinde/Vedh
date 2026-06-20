@@ -93,9 +93,12 @@ Light Green: #AFD275
   Compiles "updater.py" (console, onefile) and "app/main.py" (windowed, paths=".") into the dist/ directory.
   Injects "updater.exe" into the application's root directory, zips it, calculates the SHA-256 hash, and drafts a release.
 
-* Self-Updater Client:
+* Self- Updater Client:
   On launch, "main_window.py" runs an async check. If a release tag higher than v0.1.0 is found, it shows a toast message.
   In settings, clicking "Check for Updates" displays a modal dialog, downloads the update file, verifies the hash, extracts the ZIP, launches "updater.exe", and exits.
   "updater.exe" waits for the main app to close, wipes all old files (preserving ~/.vedh/ data), copies the new version files, and launches the updated Vedh.exe.
 
-  
+
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+ 

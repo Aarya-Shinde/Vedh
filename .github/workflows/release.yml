@@ -38,21 +38,45 @@ jobs:
         run: |
           Copy-Item -Path dist\updater.exe -Destination dist\Vedh\
 
+      - name: Add WiX to PATH
+        shell: powershell
+        run: |
+          $wixPath = Get-ChildItem -Path "C:\Program Files (x86)" -Filter "WiX Toolset*" | Select-Object -First 1
+          if ($wixPath) {
+              $binPath = Join-Path $wixPath.FullName "bin"
+              Write-Output "Adding WiX bin directory to path: $binPath"
+              echo "$binPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+              Write-Error "WiX Toolset not found under C:\Program Files (x86)"
+              exit 1
+          }
+
+      - name: Build MSI Installer
+        run: |
+          heat dir dist\Vedh -cg AppFilesGroup -dr INSTALLFOLDER -sreg -sfrag -srd -gg -out installer\AppFiles.wxs
+          candle -out dist\ installer\Product.wxs installer\AppFiles.wxs
+          light -out dist\Vedh_Windows_Setup.msi -b dist\Vedh dist\Product.wixobj dist\AppFiles.wixobj -ext WixUIExtension
+        shell: cmd
+
       - name: Package Dist folder
         shell: powershell
         run: |
           Compress-Archive -Path dist\Vedh\* -DestinationPath dist\Vedh_Windows.zip
 
-      - name: Generate SHA-256 Checksum
+      - name: Generate SHA-256 Checksums
         shell: powershell
         run: |
-          $hash = (Get-FileHash dist\Vedh_Windows.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  Vedh_Windows.zip" | Out-File -FilePath dist\checksums.txt -Encoding ascii
+          $zipHash = (Get-FileHash dist\Vedh_Windows.zip -Algorithm SHA256).Hash.ToLower()
+          $msiHash = (Get-FileHash dist\Vedh_Windows_Setup.msi -Algorithm SHA256).Hash.ToLower()
+          "$zipHash  Vedh_Windows.zip" | Out-File -FilePath dist\checksums.txt -Encoding ascii
+          "$msiHash  Vedh_Windows_Setup.msi" | Out-File -FilePath dist\checksums.txt -Encoding ascii -Append
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/Vedh_Windows.zip
+            dist/Vedh_Windows_Setup.msi
             dist/checksums.txt
           token: ${{ secrets.GITHUB_TOKEN }}
+
